@@ -54,7 +54,7 @@ def get_labeled_data(data: Dict[str, np.array], labels: List[str]) -> Dict[str, 
 
 def get_object_label(name, labels):
     for label in labels:
-        if label in name.lower():
+        if label in name.lower() and not "deb" in name.lower():
             return label
     return None
 

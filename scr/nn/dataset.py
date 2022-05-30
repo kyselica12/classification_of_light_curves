@@ -54,6 +54,9 @@ def create_datasets(labeled_data, labels, validation_split=0.1):
 
     c_train = int(len(X) * validation_split)
 
+    for label, idx in labels_id.items():
+        print(f"label: {label} -> {np.sum(y[c_train:] == idx)} examples")
+
     val_set = NetDataset(X[:c_train], y[:c_train])
     train_set = NetDataset(X[c_train:], y[c_train:])
 

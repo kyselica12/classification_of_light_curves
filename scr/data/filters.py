@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from functools import partial
@@ -43,14 +44,51 @@ def apply_filters(data, filters_f, operation="AND"):
     
     return data[f_res]
 
+def apply_sequential_filters(data, filters):
+
+    for f in filters:
+        ok = f(data)
+        data = data[ok]
+
+    return data
+
+
 def filter_data(data, filter_config:FilterConfig):
 
-    f_continous = partial(get_filter_continuous, n_bins=filter_config.n_bins, 
+    filters = []
+    filters.append(partial(get_filter_continuous, n_bins=filter_config.n_bins, 
                                                 gap=filter_config.n_gaps, 
-                                                continous_gap=filter_config.gap_size)
-    f_ratio = partial(get_filter_ratio, ratio=filter_config.non_zero_ratio)
-    app_filters_p = partial(apply_filters, filters_f=[f_continous, f_ratio], operation="AND")
+                                                continous_gap=filter_config.gap_size))
+    filters.append(partial(get_filter_ratio, ratio=filter_config.non_zero_ratio))
 
+    if filter_config.rms_ratio != 0:
+        filters.append(partial(get_rms_filter, rms_ratio=filter_config.rms_ratio))
+    # app_filters_p = partial(apply_filters, filters_f=filters, operation="AND")
+    app_filters_p = partial(apply_sequential_filters, filters=filters)
     filtered_data = dict_map(data, app_filters_p)
 
     return filtered_data
+
+
+def get_rms_filter(data_list, rms_ratio=0.5):
+    
+    ok = np.zeros((data_list.shape[0])).astype(bool)
+    print(data_list.shape)
+    
+    for i, data in enumerate(data_list):
+        indices = data != 0
+        x = np.linspace(0,len(data), endpoint=False, num=len(data))[indices]
+        y = data[indices]
+        ampl = np.max(y) - np.min(y)
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', np.RankWarning)
+            p30 = np.poly1d(np.polyfit(x, y, 30))
+            yy = p30(x)
+        
+        del p30
+        rms = np.sqrt(np.mean((y-yy)**2))
+
+        ok[i] = rms / (ampl+10**(-6)) <= rms_ratio
+
+    return ok
