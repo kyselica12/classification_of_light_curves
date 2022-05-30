@@ -10,7 +10,7 @@ from config import NetConfig
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
-MODELS_PATH = "c:/Users/danok/work/dizertacka/resources/models"
+MODELS_PATH = "C:\\Users\\danok\\work\\dizertacka\\classification_of_light_curves\\resources\\models"
 
 
 class Net(nn.Module):
@@ -79,12 +79,13 @@ class Net(nn.Module):
               reset_optim=False,
               tensorboard=False,
               save_interval=None, 
-              show=False):
+              show=False,
+              class_weights=None):
 
         self.train()
         self._set_optim(reset_optim)
 
-        criterion = nn.NLLLoss() 
+        criterion = nn.NLLLoss(weight=class_weights) 
 
         if tensorboard:
             tensorboard = SummaryWriter(log_dir="C:\\Users\\danok\\work\\dizertacka\\tensorboard\\run")
@@ -225,7 +226,7 @@ class ResNet(nn.Module):
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
         self.optim = None
-        self.name = "ResNet"
+        self.name = "ResNet_2"
         self.checkpoint = 0
 
         trained_epochs = 0
@@ -270,12 +271,13 @@ class ResNet(nn.Module):
               reset_optim=False,
               tensorboard=False,
               save_interval=None, 
-              show=False):
+              show=False,
+              class_weights=None):
 
         self.train()
         self._set_optim(reset_optim)
 
-        criterion = nn.NLLLoss() 
+        criterion = nn.NLLLoss(weight=class_weights)
 
         if tensorboard:
             tensorboard = SummaryWriter(log_dir="C:\\Users\\danok\\work\\dizertacka\\system\\tensorboard\\run")

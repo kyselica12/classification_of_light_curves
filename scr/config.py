@@ -24,10 +24,11 @@ class FilterConfig:
     n_gaps: int
     gap_size: int
     non_zero_ratio: float
+    rms_ratio: float = 0
 
 
 def load_config() -> Tuple[DataConfig, NetConfig, FilterConfig]:
-    PATH = "C:\\Users\\danok\\work\\dizertacka\\system\\scr\\comfig.yaml"
+    PATH = "C:\\Users\\danok\\work\\dizertacka\\classification_of_light_curves\\scr\\comfig.yaml"
     
     with open(PATH, "r") as ymlfile:
         cfg = yaml.safe_load(ymlfile)
