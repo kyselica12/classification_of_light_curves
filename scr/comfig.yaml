@@ -1,10 +1,11 @@
 data:
-  path: c:/Users/danok/work/dizertacka/system/resources/Fall_2021_2
+  path: c:/Users/danok/work/dizertacka/classification_of_light_curves/resources/Fall_2021_2
   labels:
     # cylinder:
       - falcon_9
       - atlas_5
       - delta_4
+      - cz-3
     ## boxwing:
     #   - navstar 
     #   - giove 
