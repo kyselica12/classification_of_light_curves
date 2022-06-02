@@ -17,6 +17,7 @@ class NetConfig:
     stride: int
     kernel_size: int
     checkpoint: Union[str, int] = None
+    device: str = "cpu"
 
 @dataclass
 class FilterConfig:

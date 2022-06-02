@@ -1,5 +1,5 @@
 data:
-  path: c:/Users/danok/work/dizertacka/classification_of_light_curves/resources/Fall_2021_2
+  path: C:/Users/luk/Desktop/kyselica/classification_of_light_curves/resources
   labels:
     # cylinder:
       - falcon_9
@@ -33,3 +33,4 @@ filter:
   n_gaps: 0
   gap_size: 0
   non_zero_ratio: 0.2
+  rms_ratio: 0.1

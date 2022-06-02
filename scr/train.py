@@ -18,12 +18,12 @@ class Trainer:
         self.net = net
         
         self.train_set, self.val_set = create_datasets(filtered_data, data_cfg.labels, validation_split=0.1)
-        # labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
-        # self.class_weights = [sum(counts) / c  for c in counts]
-        # example_weights = [self.class_weights[e] for e in self.train_set.labels ]
-        # sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
+        labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
+        self.class_weights = [sum(counts) / c  for c in counts]
+        example_weights = [self.class_weights[e] for e in self.train_set.labels ]
+        sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
 
-        self.train_loader = DataLoader(self.train_set,batch_size=64)
+        self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=sampler)
         self.val_loader = DataLoader(self.val_set, batch_size=64)
     
     def train(self, epochs: int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:

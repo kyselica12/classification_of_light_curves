@@ -10,7 +10,7 @@ from config import NetConfig
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
-MODELS_PATH = "C:\\Users\\danok\\work\\dizertacka\\classification_of_light_curves\\resources\\models"
+MODELS_PATH = "C:/Users/luk/Desktop/kyselica/classification_of_light_curves/resources/models"
 
 
 class Net(nn.Module):
@@ -24,6 +24,8 @@ class Net(nn.Module):
             self.load(checkpoint=cfg.checkpoint)
 
         self.double()
+        self.device = cfg.device
+        self.to(self.device)
 
     def _initialize(self, name, input_size, n_channels, hid_dim, n_classes, kernel, stride):
         self.name = name
@@ -88,7 +90,7 @@ class Net(nn.Module):
         criterion = nn.NLLLoss(weight=class_weights) 
 
         if tensorboard:
-            tensorboard = SummaryWriter(log_dir="C:\\Users\\danok\\work\\dizertacka\\tensorboard\\run")
+            tensorboard = SummaryWriter(log_dir="C:/Users/luk/Desktop/kyselica/classification_of_light_curves/tensorboard/run")
 
         start_checkpoint = self.checkpoint
 
@@ -208,7 +210,7 @@ class ResBlock(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, num_classes=3):
+    def __init__(self, num_classes=3, device="cpu", name="RestNet"):
         super(ResNet, self).__init__()
         self.in_channels = 1
         self.conv1 = nn.Conv1d(1, 16, kernel_size=5, stride=2, padding=3, bias=False)
@@ -226,12 +228,15 @@ class ResNet(nn.Module):
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
         self.optim = None
-        self.name = "ResNet_2"
+        self.name = name
         self.checkpoint = 0
 
         trained_epochs = 0
 
+        self.device = device
         self.double()
+
+        self.to(self.device)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -280,7 +285,7 @@ class ResNet(nn.Module):
         criterion = nn.NLLLoss(weight=class_weights)
 
         if tensorboard:
-            tensorboard = SummaryWriter(log_dir="C:\\Users\\danok\\work\\dizertacka\\system\\tensorboard\\run")
+            tensorboard = SummaryWriter(log_dir="C:/Users/luk/Desktop/kyselica/classification_of_light_curves/tensorboard/run")
 
         start_checkpoint = self.checkpoint
 
@@ -322,8 +327,8 @@ class ResNet(nn.Module):
 
     def _train_one_epoch(self, criterion, data):
         inputs, labels = data
-        inputs = inputs.reshape(-1,1,300).double()
-        labels = labels.long()
+        inputs = inputs.reshape(-1,1,300).double().to(self.device)
+        labels = labels.long().to(self.device)
                 
                 # zero the parameter gradients
         self.optim.zero_grad()
@@ -341,7 +346,7 @@ class ResNet(nn.Module):
 
     def predict(self, inputs):
         self.eval()
-        inputs = inputs.reshape(-1,1,300).double()
+        inputs = inputs.reshape(-1,1,300).double().to(self.device)
 
         outputs = self(inputs)
         _, predicted = torch.max(outputs.data, 1)
@@ -359,11 +364,12 @@ def evaulate_net(net: Net, data_loader: DataLoader):
     true_y = np.empty((0,0))
 
     with torch.no_grad():   
+        net.to(net.device)
         for data in data_loader:
             inputs, labels = data
-            labels = labels.long()
+            labels = labels.long().to(net.device)
             
-            inputs = inputs.reshape(-1,1,300).double()
+            inputs = inputs.reshape(-1,1,300).double().to(net.device)
             outputs = net(inputs)
             _, predicted = torch.max(outputs.data, 1)
 
@@ -372,6 +378,9 @@ def evaulate_net(net: Net, data_loader: DataLoader):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
+            if net.device != "cpu":
+                predicted = predicted.detach().to('cpu')
+                labels = labels.detach().to('cpu')
             pred_y = np.append(pred_y, predicted.numpy())
             true_y = np.append(true_y, labels.numpy())
 
