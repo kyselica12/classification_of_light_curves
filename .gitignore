@@ -583,3 +583,12 @@ tensorboard/run/events.out.tfevents.1646216849.DESKTOP-GA51QDC.8308.0
 tensorboard/run/events.out.tfevents.1646217095.DESKTOP-GA51QDC.22864.0
 tensorboard/run/events.out.tfevents.1646217128.DESKTOP-GA51QDC.18452.0
 tensorboard/test/events.out.tfevents.1634037281.Malotraktor.22274.4
+scr/__pycache__/config.cpython-310.pyc
+scr/__pycache__/train.cpython-310.pyc
+scr/data/__pycache__/__init__.cpython-310.pyc
+scr/data/__pycache__/data_load.cpython-310.pyc
+scr/data/__pycache__/filters.cpython-310.pyc
+scr/data/__pycache__/load_multi_array.cpython-310.pyc
+scr/nn/__pycache__/__init__.cpython-310.pyc
+scr/nn/__pycache__/dataset.cpython-310.pyc
+scr/nn/__pycache__/net.cpython-310.pyc
