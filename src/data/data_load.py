@@ -7,16 +7,16 @@ import os
 from collections import defaultdict
 
 from data.load_multi_array import load_multi_array
-from config import DataConfig
+from config import DataConfig, DATA_PATH, LABELS
 
-def load_data(cfg: DataConfig):
+def load_data():
     data = defaultdict(list)
         
-    files = [p for p in glob.iglob(f"{cfg.path}/*_multi_array.npy")]
+    files = [p for p in glob.iglob(f"{DATA_PATH}/*_multi_array.npy")]
 
-    for file in tqdm.tqdm(files, desc=f"Folder {cfg.path}"):
+    for file in tqdm.tqdm(files, desc=f"Folder {DATA_PATH}"):
         object_name = os.path.split(file)[1][:-len("_multi_array.npy")]
-        label = get_object_label(object_name, cfg.labels)
+        label = get_object_label(object_name, LABELS)
         if label:
             arr = load_multi_array(file)
             data[label].extend(arr)

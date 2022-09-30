@@ -4,7 +4,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from functools import partial
 
 from data.data_load import dict_map
-from config import FilterConfig
+from config import N_BINS, N_GAPS, GAP_SIZE, NON_ZERP_RATIO, RMS_RATIO
 
 def get_filter_continuous(data, n_bins=10, gap=0, continous_gap=3):
     N = 300 // n_bins
@@ -53,16 +53,16 @@ def apply_sequential_filters(data, filters):
     return data
 
 
-def filter_data(data, filter_config:FilterConfig):
+def filter_data(data):
 
     filters = []
-    filters.append(partial(get_filter_continuous, n_bins=filter_config.n_bins, 
-                                                gap=filter_config.n_gaps, 
-                                                continous_gap=filter_config.gap_size))
-    filters.append(partial(get_filter_ratio, ratio=filter_config.non_zero_ratio))
+    filters.append(partial(get_filter_continuous, n_bins=N_BINS, 
+                                                gap=N_GAPS, 
+                                                continous_gap=GAP_SIZE))
+    filters.append(partial(get_filter_ratio, ratio=NON_ZERP_RATIO))
 
-    if filter_config.rms_ratio != 0:
-        filters.append(partial(get_rms_filter, rms_ratio=filter_config.rms_ratio))
+    if RMS_RATIO != 0:
+        filters.append(partial(get_rms_filter, rms_ratio=RMS_RATIO))
     # app_filters_p = partial(apply_filters, filters_f=filters, operation="AND")
     app_filters_p = partial(apply_sequential_filters, filters=filters)
     filtered_data = dict_map(data, app_filters_p)

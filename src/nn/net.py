@@ -6,7 +6,8 @@ import tqdm
 from torch.utils.data import DataLoader
 import glob
 import os
-from config import NetConfig
+from config import NET_NAME, INPUT_SIZE, N_CHANNELS, N_CLASSES, HID_DIM, STRIDE, KERNEL_SIZE, DEVICE, CHECKPOINT
+
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
@@ -15,34 +16,35 @@ MODELS_PATH = "C:/Users/luk/Desktop/kyselica/classification_of_light_curves/reso
 
 class Net(nn.Module):
     
-    def __init__(self, cfg: NetConfig):
+    def __init__(self):
         super().__init__()
-        self._initialize(cfg.name, cfg.input_size, cfg.n_channels, cfg.hid_dim, 
-                        cfg.n_classes, cfg.kernel_size, cfg.stride)
+        self._initialize()
 
-        if cfg.checkpoint:
-            self.load(checkpoint=cfg.checkpoint)
+        if CHECKPOINT:
+            self.load(checkpoint=CHECKPOINT
+            
+            )
 
         self.double()
-        self.device = cfg.device
+        self.device = DEVICE
         self.to(self.device)
 
-    def _initialize(self, name, input_size, n_channels, hid_dim, n_classes, kernel, stride):
-        self.name = name
+    def _initialize(self):
+        self.name = NET_NAME
         self.checkpoint = 0
         
-        self.size = input_size
-        padding = kernel//2
-        self.conv = nn.Conv1d(1, n_channels, kernel_size=kernel, stride=stride, padding=padding)
+        self.size = INPUT_SIZE
+        padding = KERNEL_SIZE//2
+        self.conv = nn.Conv1d(1, N_CHANNELS, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=padding)
         self.drop = nn.Dropout(0.2)
         
         self.pool = nn.MaxPool1d(kernel_size=5, stride=4, padding=1)
 
         self.flat = nn.Flatten()
-        in_dim = int((self.size + padding*2 - (kernel//2)*2) / stride / 4) * n_channels
+        in_dim = int((self.size + padding*2 - (KERNEL_SIZE//2)*2) / STRIDE / 4) * N_CHANNELS
       
-        self.l1 = nn.Linear(in_dim, hid_dim)
-        self.l2 = nn.Linear(hid_dim, n_classes)
+        self.l1 = nn.Linear(in_dim, HID_DIM)
+        self.l2 = nn.Linear(HID_DIM, N_CLASSES)
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
         self.optim = None
@@ -100,7 +102,7 @@ class Net(nn.Module):
             correct = 0
             total = 0
 
-            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=None):
+            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=False):
                 # get the inputs; data is a list of [inputs, labels]
                 epoch_loss, epoch_correct = self._train_one_epoch(criterion, data)
 
@@ -122,8 +124,8 @@ class Net(nn.Module):
                 print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
 
             if tensorboard:
-                tensorboard.add_scalar(f"{self.name}_{start_checkpoint:04d}/train", {'loss':running_loss,'accuracy':correct/total * 100}, epoch)
-                tensorboard.add_scalar(f"{self.name}_{start_checkpoint:04d}/val", {'loss':val_loss,'accuracy':val_acc}, epoch)
+                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/accuracy", {'train':correct/total * 100,'val':val_acc}, epoch)
+                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/loss", {'train':running_loss,'val': val_loss}, epoch)
 
         if tensorboard:
             tensorboard.close()
@@ -282,7 +284,7 @@ class ResNet(nn.Module):
         self.train()
         self._set_optim(reset_optim)
 
-        criterion = nn.NLLLoss(weight=class_weights)
+        criterion = nn.NLLLoss(weight=class_weights) 
 
         if tensorboard:
             tensorboard = SummaryWriter(log_dir="C:/Users/luk/Desktop/kyselica/classification_of_light_curves/tensorboard/run")
@@ -295,7 +297,7 @@ class ResNet(nn.Module):
             correct = 0
             total = 0
 
-            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=None):
+            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=False):
                 # get the inputs; data is a list of [inputs, labels]
                 epoch_loss, epoch_correct = self._train_one_epoch(criterion, data)
 
@@ -317,11 +319,9 @@ class ResNet(nn.Module):
                 print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
 
             if tensorboard:
-                tensorboard.add_scalar(f"Loss/train", running_loss, epoch)
-                tensorboard.add_scalar(f"Loss/test",val_loss, epoch)
-                tensorboard.add_scalar(f"Accuracy/train", correct/total * 100, epoch)
-                tensorboard.add_scalar(f"Accuracy/test",val_acc, epoch)
-                
+                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/accuracy", {'train':correct/total * 100,'val':val_acc}, epoch)
+                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/loss", {'train':running_loss,'val': val_loss}, epoch)
+
         if tensorboard:
             tensorboard.close()
 
