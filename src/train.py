@@ -1,4 +1,3 @@
-from config import DataConfig, NetConfig, FilterConfig
 from data.data_load import load_data
 from data.filters import filter_data
 from nn.net import Net, evaulate_net
@@ -10,9 +9,9 @@ import torch
 
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from nn.dataset import NetDataset
+from nn.dataset import NetDataset, AugmentedBalancedDataset
+from config import DataConfig
 
-from config import LABELS, LOAD_DATA, FILTER_DATA
 
 class Trainer:
 
@@ -26,45 +25,39 @@ class Trainer:
         self.train_loader = None
         self.val_loader = None
 
-        if LOAD_DATA and FILTER_DATA:
-            self.load_data()      
-        
-        if sampler:
-            self.add_sampler()
-    
-    def load_data(self, output_folder=None):
-        self.data = load_data()
-        self.filtered_data = filter_data(self.data)
+    def load_data(self, cfg: DataConfig):
+        self.data = load_data(cfg.path, cfg.labels, cfg.convert_to_mag)
+        if cfg.filter:
+            self.data = filter_data(self.data, cfg.filter)
 
-        self.train_set, self.val_set = create_datasets(self.filtered_data, LABELS, validation_split=0.1, output_folder=output_folder)
+        self.train_set, self.val_set = create_datasets(self.data, cfg)
 
     def add_sampler(self):
         labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
-        self.class_weights = torch.tensor([sum(counts) / c  for c in counts])
+        self.class_weights = torch.tensor([sum(counts) / c  for c in counts]).to(self.net.device)
         example_weights = [self.class_weights[e] for e in self.train_set.labels ]
         self.sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
 
     def load_data_from_file(self, path):
-        X_train = np.loadtxt(f"{path}/train_x.np")
-        Y_train = np.loadtxt(f"{path}/train_y.np").astype(dtype=np.int32)
-        X_test = np.loadtxt(f"{path}/test_x.np")
-        Y_test = np.loadtxt(f"{path}/test_y.np")
+        X_train = np.loadtxt(f"{path}/train_x.npy")
+        Y_train = np.loadtxt(f"{path}/train_y.npy").astype(dtype=np.int32)
+        X_test = np.loadtxt(f"{path}/test_x.npy")
+        Y_test = np.loadtxt(f"{path}/test_y.npy")
 
         self.val_set = NetDataset(X_test, Y_test)
-        self.train_set = NetDataset(X_train, Y_train)
-        
+        self.train_set = NetDataset(X_train, Y_train)     
     
-    def train(self, epochs: int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
-        self.train_loader = DataLoader(self.train_set,batch_size=128, sampler=self.sampler)
-        self.val_loader = DataLoader(self.val_set, batch_size=128)
+    def train(self, epochs: int, batch_size:int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
+        self.train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)
+        self.val_loader = DataLoader(self.val_set, batch_size=batch_size)
         self.net.train_model(self.train_loader, self.val_loader, epochs, 
                              reset_optimizer,tensorboard_on, save_interval, print_on, class_weights=self.class_weights)
 
     def evaluate(self, labels=None):
         
         if self.train_loader is None:
-            self.train_loader = DataLoader(self.train_set,batch_size=128, sampler=self.sampler)
-            self.val_loader = DataLoader(self.val_set, batch_size=128)
+            self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
+            self.val_loader = DataLoader(self.val_set, batch_size=64)
 
         if labels:
             for i in range(len(labels)):

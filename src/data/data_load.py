@@ -7,22 +7,42 @@ import os
 from collections import defaultdict
 
 from data.load_multi_array import load_multi_array
-from config import DataConfig, DATA_PATH, LABELS
 
-def load_data():
+def load_data_multi_array(path, labels, convert_to_mag=False):
     data = defaultdict(list)
         
-    files = [p for p in glob.iglob(f"{DATA_PATH}/*_multi_array.npy")]
+    files = [p for p in glob.iglob(f"{path}/*_multi_array.npy")]
 
-    for file in tqdm.tqdm(files, desc=f"Folder {DATA_PATH}"):
+    for file in tqdm.tqdm(files, desc=f"Folder {path}"):
         object_name = os.path.split(file)[1][:-len("_multi_array.npy")]
-        label = get_object_label(object_name, LABELS)
+        label = get_object_label(object_name, labels)
         if label:
             arr = load_multi_array(file)
+            if convert_to_mag:
+                arr = -2.5 * np.log10(arr)
             data[label].extend(arr)
 
     for key in data:
         data[key] = np.array(data[key])
+
+    return data
+
+def load_data(path, labels, convert_to_mag=False):
+    data = defaultdict(list)
+        
+    files = [p for p in glob.iglob(f"{path}/*.npy")]
+
+    for file in tqdm.tqdm(files, desc=f"Folder {path}"):
+        object_name = os.path.split(file)[1][:-len(".npy")]
+        label = get_object_label(object_name, labels)
+        if label:
+            arr = np.load(file)
+            if np.any(arr < 0):
+                arr += np.abs(np.min(arr)) + 0.000000001
+            if convert_to_mag:
+                arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
+            print(f"Label: {label} {len(arr)} examples.")
+            data[label] = arr
 
     return data
 
@@ -53,8 +73,10 @@ def get_labeled_data(data: Dict[str, np.array], labels: List[str]) -> Dict[str, 
     return labeled_data
 
 def get_object_label(name, labels):
+    name = name.lower().replace("_", "").replace("-", "")
     for label in labels:
-        if label in name.lower() and not "deb" in name.lower():
+        label2 = label.lower().replace("_", "").replace("-", "")
+        if label2 in name.lower() and not "deb" in name.lower():
             return label
     return None
 
@@ -85,4 +107,12 @@ def get_representants(arr):
 def get_stats(arr):
     stats = np.sum(arr != 0, axis=1) / 300 * 100
     return stats
+    
+def load_data_from_numpy_arrays(path):
+    data = {}
+    for filepath in glob.iglob(f"{path}/*.npy"):
+        label = os.path.split(filepath)[1][:-len(".npy")]
+        data[label] = np.load(filepath)
+
+    return data  
     

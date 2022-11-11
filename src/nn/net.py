@@ -6,73 +6,80 @@ import tqdm
 from torch.utils.data import DataLoader
 import glob
 import os
-from config import NET_NAME, INPUT_SIZE, N_CHANNELS, N_CLASSES, HID_DIM, STRIDE, KERNEL_SIZE, DEVICE, CHECKPOINT
+
+from config import NetConfig
 
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
-MODELS_PATH = "C:/Users/luk/Desktop/kyselica/classification_of_light_curves/resources/models"
-
 
 class Net(nn.Module):
     
-    def __init__(self):
+    def __init__(self, cfg: NetConfig):
         super().__init__()
+        self.cfg = cfg
         self._initialize()
+        self.name = cfg.name
 
-        if CHECKPOINT:
-            self.load(checkpoint=CHECKPOINT
-            
-            )
+        if self.cfg.checkpoint:
+            self.load(checkpoint=self.cfg.checkpoint)
 
         self.double()
-        self.device = DEVICE
+        self.device = self.cfg.device
         self.to(self.device)
+        
 
     def _initialize(self):
-        self.name = NET_NAME
         self.checkpoint = 0
         
-        self.size = INPUT_SIZE
-        padding = KERNEL_SIZE//2
-        self.conv = nn.Conv1d(1, N_CHANNELS, kernel_size=KERNEL_SIZE, stride=STRIDE, padding=padding)
-        self.drop = nn.Dropout(0.2)
-        
-        self.pool = nn.MaxPool1d(kernel_size=5, stride=4, padding=1)
+        self.size = self.cfg.input_size
 
-        self.flat = nn.Flatten()
-        in_dim = int((self.size + padding*2 - (KERNEL_SIZE//2)*2) / STRIDE / 4) * N_CHANNELS
-      
-        self.l1 = nn.Linear(in_dim, HID_DIM)
-        self.l2 = nn.Linear(HID_DIM, N_CLASSES)
+        padding =  self.cfg.kernel_size // 2
+        in_dim = int((self.size + padding* 2 - (self.cfg.kernel_size//2)*2) / self.cfg.stride / 4) * self.cfg.n_channels
+        print("middle_dim", in_dim)
+
+        self.layers = nn.Sequential(
+            nn.Conv1d(1, self.cfg.n_channels, kernel_size=self.cfg.kernel_size, stride=self.cfg.stride, padding=padding),
+            nn.MaxPool1d(kernel_size=5, stride=4, padding=1),
+            nn.Flatten(),
+            nn.Linear(in_dim, self.cfg.hid_dim),
+            nn.ReLU(),
+            nn.Linear(self.cfg.hid_dim, self.cfg.n_classes)
+        )
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
+
         self.optim = None
+        self.epoch_trained = 0
 
     def forward(self, x): 
-        out = torch.relu(self.conv(x))
-        out = self.drop(out)
-        out = self.pool(out)
-        out = self.flat(out)
-        out = torch.relu(self.l1(out))
-        out = self.logsoftmax(self.l2(out))
-        return out
+        out = x
+        for layer in self.layers:
+            out = layer(out)
+        
+        return self.logsoftmax(out)
 
     def save(self):
-        torch.save(self.state_dict(), f'{MODELS_PATH}\\{self.name}_checkpoint_{self.checkpoint:03d}.model')
+        torch.save(self.state_dict(), f'{self.cfg.save_path}\\{self.name}_epochs_{self.epoch_trained:d}_checkpoint_{self.checkpoint:03d}.model')
 
-    def load(self, checkpoint='latest'):
-        def get_checkpoint_number(path):
-            return int(os.path.split(path)[1][-9:-6])
+    def load(self, checkpoint='latest', ):
+        def get_checkpoint_and_epoch_number(path):
+            checkpoint = int(os.path.split(path)[1][-9:-6])
+            epoch = int(path.split("_")[-3])
+            seed = int(path.split("_")[-5])
+            return checkpoint, epoch, seed
 
         if checkpoint == 'latest':
-            models = list(glob.iglob(f"{MODELS_PATH}\\{self.name}_checkpoint_*.model"))
-            model_path = max(models, key=get_checkpoint_number)
+            models = list(glob.iglob(f"{self.cfg.save_path}\\{self.name}_epochs_*_checkpoint_*.model"))
+            model_path = max(models, key=get_checkpoint_and_epoch_number)
         else:
-            model_path = f"{MODELS_PATH}\\{self.name}_checkpoint_{checkpoint:03d}.model"
+            models = list(glob.iglob(f"{self.cfg.save_path}\\{self.name}_epochs_*_checkpoint_{checkpoint:03d}.model"))
+            model_path = max(models, key=get_checkpoint_and_epoch_number)
 
         self.load_state_dict(torch.load(model_path))
-        self.checkpoint = get_checkpoint_number(model_path)
+        self.checkpoint, self.epoch_trained, seed = get_checkpoint_and_epoch_number(model_path)
+
+        return seed
 
     def _set_optim(self, fresh=False):
         if self.optim is None or fresh:
@@ -92,17 +99,17 @@ class Net(nn.Module):
         criterion = nn.NLLLoss(weight=class_weights) 
 
         if tensorboard:
-            tensorboard = SummaryWriter(log_dir="C:/Users/luk/Desktop/kyselica/classification_of_light_curves/tensorboard/run")
+            tensorboard = SummaryWriter(log_dir="C:/Users/Kyselica/Desktop/kyselica/classification_of_light_curves/tensorboard/run")
 
         start_checkpoint = self.checkpoint
 
-        for epoch in range(epochs):  # loop over the dataset multiple times
+        for epoch in tqdm.tqdm(range(epochs), desc="Training", position=0):  # loop over the dataset multiple times
 
             running_loss = 0.0
             correct = 0
             total = 0
 
-            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=False):
+            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=False, position=1):
                 # get the inputs; data is a list of [inputs, labels]
                 epoch_loss, epoch_correct = self._train_one_epoch(criterion, data)
 
@@ -123,17 +130,22 @@ class Net(nn.Module):
                 print(f"Train:\n\tLoss: {running_loss}\n\tAcc: {correct/total*100}", flush=True)
                 print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
 
+            self.epoch_trained += 1
+
             if tensorboard:
-                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/accuracy", {'train':correct/total * 100,'val':val_acc}, epoch)
-                tensorboard.add_scalars(f"{self.name}_{start_checkpoint:04d}/loss", {'train':running_loss,'val': val_loss}, epoch)
+                tensorboard.add_scalars(f"{self.name}/accuracy", {'train':correct/total * 100,'val':val_acc}, self.epoch_trained)
+                tensorboard.add_scalars(f"{self.name}/loss", {'train':running_loss,'val': val_loss}, self.epoch_trained)
+            
+            
+
 
         if tensorboard:
             tensorboard.close()
 
     def _train_one_epoch(self, criterion, data):
         inputs, labels = data
-        inputs = inputs.reshape(-1,1,300).double()
-        labels = labels.long()
+        inputs = inputs.reshape(-1,1,300).double().to(self.cfg.device)
+        labels = labels.to(self.cfg.device).long().to(self.cfg.device)
                 
                 # zero the parameter gradients
         self.optim.zero_grad()
@@ -157,6 +169,58 @@ class Net(nn.Module):
         _, predicted = torch.max(outputs.data, 1)
 
         return predicted
+
+class ResBlock(nn.Module):
+    def __init__(
+        self, in_channels, intermediate_channels, identity_downsample=None, stride=1
+    ):
+        super(ResBlock, self).__init__()
+        self.expansion = 2
+        self.conv1 = nn.Conv1d(
+            in_channels, intermediate_channels, kernel_size=1, stride=1, padding=0, bias=False
+        )
+        self.bn1 = nn.BatchNorm1d(intermediate_channels)
+        self.conv2 = nn.Conv1d(
+            intermediate_channels,
+            intermediate_channels,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            bias=False
+        )
+        self.bn2 = nn.BatchNorm1d(intermediate_channels)
+        self.conv3 = nn.Conv1d(
+            intermediate_channels,
+            intermediate_channels * self.expansion,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False
+        )
+        self.bn3 = nn.BatchNorm1d(intermediate_channels * self.expansion)
+        self.relu = nn.ReLU()
+        self.identity_downsample = identity_downsample
+        self.stride = stride
+
+    def forward(self, x):
+        identity = x.clone()
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+        x = self.bn3(x)
+
+
+        if self.identity_downsample is not None:
+            identity = self.identity_downsample(identity)
+
+        x += identity
+        x = self.relu(x)
+        
+        return x
 
 class ResBlock(nn.Module):
     def __init__(

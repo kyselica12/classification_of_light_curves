@@ -2,10 +2,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import random
 
-from config import (AUGMENTATION_GAP_PROB, AUGMENTATION_LEAVE_ORIGINAL, 
-                    AUGMENTATION_MAX_LEN, AUGMENTATION_MAX_NOISE, 
-                    AUGMENTATION_MIN_EXAMPLES, AUGMENTATION_MIN_LEN, 
-                    AUGMENTATION_NUM_GAPS)
+from config import DataConfig, AugmentationConfig
 
 class NetDataset(Dataset):
 
@@ -19,13 +16,14 @@ class NetDataset(Dataset):
         max_value = np.array([np.max(d[d!=0]) for d in self.data])
         min_value = np.array([np.min(d[d!=0]) for d in self.data])
 
+        print(min_value)
         for i in range(len(self.data)):
             d = self.data[i]
             if max_value[i] != 0:
                 d[d==0] = -1
                 diff = max_value[i] - min_value[i]
-                d[d!=-1] = (d[d!=-1] - min_value[i]) / diff
-
+                d[d!=-1] = (d[d!=-1] - min_value[i]) / (diff + 0.000000000001)
+            
     def __len__(self):
         return len(self.data)
 
@@ -35,31 +33,34 @@ class NetDataset(Dataset):
 
         return arr, label
 
-
 class AugmentedBalancedDataset(NetDataset):
 
-    def __init__(self, data, labels) -> None:
+    def __init__(self, 
+                    data, labels, 
+                    roll=True, add_gaps=True, add_noise=True,
+                    max_noise=None, 
+                    num_gaps=None, min_gap_len=None, max_gap_len=None, gap_prob=None, 
+                    use_original_data=True, min_num_examples=1000) -> None:
 
-        self.max_noise = AUGMENTATION_MAX_NOISE
+        self.max_noise = max_noise
         
-        self.num_gaps = AUGMENTATION_NUM_GAPS
-        self.gap_prob = AUGMENTATION_GAP_PROB
-        self.min_len = AUGMENTATION_MIN_LEN
-        self.max_len = AUGMENTATION_MAX_LEN
+        self.num_gaps = num_gaps
+        self.gap_prob = gap_prob
+        self.min_len = min_gap_len
+        self.max_len = max_gap_len
 
         self.data = data
         self.labels = labels
+
 
         self._normalize_data()
 
-        self.augment_data(AUGMENTATION_LEAVE_ORIGINAL, AUGMENTATION_MIN_EXAMPLES)
+        self.augment_data(use_original_data, min_num_examples, roll, add_gaps, add_noise)
 
         self._shuffle_data()
 
-        self.data = data
-        self.labels = labels
 
-    def augment_data(self, leave_original, class_size):
+    def augment_data(self, leave_original, class_size, roll, add_gaps, add_noise):
         unique_labels = np.unique(self.labels)
 
         augmented_data = []
@@ -71,11 +72,12 @@ class AugmentedBalancedDataset(NetDataset):
             if  leave_original:
                 augmented_label_data = list(label_data)
 
-            i = 0
-            while len(augmented_label_data) < class_size:
-                d = self._get_augmented(label_data[d])
-                augmented_label_data.append(d)
-                i = (i + 1) % len(label_data)
+            if roll or add_gaps or add_noise:
+                i = 0
+                while len(augmented_label_data) < class_size:
+                    d = self._get_augmented(label_data[i], roll, add_gaps, add_noise)
+                    augmented_label_data.append(d)
+                    i = (i + 1) % len(label_data)
 
             augmented_data.extend(augmented_label_data)
             augmented_labels.extend([l]*len(augmented_label_data))
@@ -89,8 +91,15 @@ class AugmentedBalancedDataset(NetDataset):
         self.data = self.data[shuffle_indices]
         self.labels = self.labels[shuffle_indices]
         
-    def _get_augmented(self, data):
-        return self._add_gap(self._roll(self._add_noise(data)))
+    def _get_augmented(self, data, roll, add_gaps, add_noise):
+        if add_noise:
+            data = self._add_noise(data)
+        if roll:
+            data = self._roll(data)
+        if add_gaps:
+            data = self._add_gap(data)
+        
+        return data
     
     def _add_noise(self, data):
 
@@ -102,6 +111,7 @@ class AugmentedBalancedDataset(NetDataset):
         shift = random.randrange(max(data.shape))
 
         return np.roll(data, shift)
+        # return data
 
     def _add_gap(self, data):
         data = data.copy()
@@ -114,9 +124,25 @@ class AugmentedBalancedDataset(NetDataset):
 
         return data
 
+def create_dataset(data, labels, cfg: AugmentationConfig):
 
+    if cfg:
+        return AugmentedBalancedDataset(data, labels,
+                                        roll=cfg.roll, 
+                                        add_gaps=cfg.add_gaps,
+                                        add_noise=cfg.add_noise,
+                                        max_noise=cfg.max_noise,
+                                        num_gaps=cfg.num_gaps,
+                                        min_gap_len=cfg.min_gap_len,
+                                        max_gap_len=cfg.max_gap_len,
+                                        gap_prob=cfg.gap_prob,
+                                        use_original_data=cfg.keep_original,
+                                        min_num_examples=cfg.min_examples
+        )
 
-def create_datasets(labeled_data, labels, validation_split=0.1, output_folder=None):
+    return NetDataset(data, labels)
+
+def split_data(labeled_data, labels, validation_split=0.1):
     X_test, X_train = [], []
     Y_test, Y_train = [], []
 
@@ -140,22 +166,27 @@ def create_datasets(labeled_data, labels, validation_split=0.1, output_folder=No
     X_train, X_test = np.array(X_train), np.array(X_test)
     Y_train, Y_test = np.array(Y_train, dtype=np.int32), np.array(Y_test, dtype=np.int32)
 
+    return (X_train, Y_train), (X_test, Y_test)
+
+def create_datasets(labeled_data, cfg:DataConfig):
+
+    (X_train, Y_train), (X_test, Y_test) = split_data(labeled_data, cfg.labels, cfg.validation_split)
+
     idx_train, idx_test = np.random.permutation(len(X_train)), np.random.permutation(len(X_test))
 
     X_train, X_test = X_train[idx_train], X_test[idx_test]
     Y_train, Y_test = Y_train[idx_train], Y_test[idx_test]
 
+    val_set = create_dataset(X_test, Y_test, cfg.augmentation)
+    train_set = create_dataset(X_train, Y_train, cfg.augmentation)
 
-    for label, idx in labels_id.items():
-        print(f"label: {label} -> {np.sum(Y_train == idx)} training examples, {np.sum(Y_test == idx)} testing examples")
+    print(f"Training set: {len(train_set)}")
+    print(f"Validation set: {len(val_set)}")
 
-    val_set = NetDataset(X_test, Y_test)
-    train_set = NetDataset(X_train, Y_train)
-
-    if output_folder:
-        np.savetxt(f"{output_folder}/train_x.np", X_train)
-        np.savetxt(f"{output_folder}/train_y.np", Y_train)
-        np.savetxt(f"{output_folder}/test_x.np", X_test)
-        np.savetxt(f"{output_folder}/test_y.np", Y_test)
+    if cfg.save_path:
+        np.save(f"{cfg.save_path}/train_x.np", X_train)
+        np.save(f"{cfg.save_path}/train_y.np", Y_train)
+        np.save(f"{cfg.save_path}/test_x.np", X_test)
+        np.save(f"{cfg.save_path}/test_y.np", Y_test)
 
     return train_set, val_set
