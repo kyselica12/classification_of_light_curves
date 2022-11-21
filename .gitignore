@@ -14,3 +14,4 @@ src/data/__pycache__/
 src/nn/__pycache__/
 src/notebooks/.ipynb_checkpoints/
 src/preprocessing/.ipynb_checkpoints/
+output/

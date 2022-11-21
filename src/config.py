@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import List
 from dataclasses_json import dataclass_json
+import numpy as np
 
 PACKAGE_PATH = "C:/Users/Kyselica/Desktop/kyselica/classification_of_light_curves"
 
@@ -49,10 +50,12 @@ class DataConfig:
     batch_size = 128
     convert_to_mag: bool = True
     labels: List[str] = None
+    regexes: List[str] = None
     validation_split: float = 0.1
     filter: FilterConfig = None
     augmentation: AugmentationConfig = None
     save_path: str = None
+    number_of_training_examples_per_class: int = np.inf
     
 @dataclass_json
 @dataclass

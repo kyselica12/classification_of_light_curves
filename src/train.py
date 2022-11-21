@@ -26,7 +26,7 @@ class Trainer:
         self.val_loader = None
 
     def load_data(self, cfg: DataConfig):
-        self.data = load_data(cfg.path, cfg.labels, cfg.convert_to_mag)
+        self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag)
         if cfg.filter:
             self.data = filter_data(self.data, cfg.filter)
 
@@ -38,11 +38,17 @@ class Trainer:
         example_weights = [self.class_weights[e] for e in self.train_set.labels ]
         self.sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
 
+    def save_data(self, path):
+        np.save(f"{path}/train_x.npy", self.train_set.data)
+        np.save(f"{path}/train_y.npy", self.train_set.labels)
+        np.save(f"{path}/val_x.npy", self.val_set.data)
+        np.save(f"{path}/val_y.npy", self.val_set.labels)
+
     def load_data_from_file(self, path):
-        X_train = np.loadtxt(f"{path}/train_x.npy")
-        Y_train = np.loadtxt(f"{path}/train_y.npy").astype(dtype=np.int32)
-        X_test = np.loadtxt(f"{path}/test_x.npy")
-        Y_test = np.loadtxt(f"{path}/test_y.npy")
+        X_train = np.load(f"{path}/train_x.npy")
+        Y_train = np.load(f"{path}/train_y.npy").astype(dtype=np.int32)
+        X_test = np.load(f"{path}/val_x.npy")
+        Y_test = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
 
         self.val_set = NetDataset(X_test, Y_test)
         self.train_set = NetDataset(X_train, Y_train)     
@@ -55,9 +61,9 @@ class Trainer:
 
     def evaluate(self, labels=None):
         
-        if self.train_loader is None:
-            self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
-            self.val_loader = DataLoader(self.val_set, batch_size=64)
+        
+        self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
+        self.val_loader = DataLoader(self.val_set, batch_size=64)
 
         if labels:
             for i in range(len(labels)):

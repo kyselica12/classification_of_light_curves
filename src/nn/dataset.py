@@ -16,7 +16,6 @@ class NetDataset(Dataset):
         max_value = np.array([np.max(d[d!=0]) for d in self.data])
         min_value = np.array([np.min(d[d!=0]) for d in self.data])
 
-        print(min_value)
         for i in range(len(self.data)):
             d = self.data[i]
             if max_value[i] != 0:

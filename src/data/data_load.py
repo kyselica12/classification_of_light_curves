@@ -4,6 +4,8 @@ import numpy as np
 import tqdm
 import glob
 import os
+import re
+
 from collections import defaultdict
 
 from data.load_multi_array import load_multi_array
@@ -27,14 +29,14 @@ def load_data_multi_array(path, labels, convert_to_mag=False):
 
     return data
 
-def load_data(path, labels, convert_to_mag=False):
+def load_data(path, labels, regexes=None, convert_to_mag=False):
     data = defaultdict(list)
         
     files = [p for p in glob.iglob(f"{path}/*.npy")]
 
     for file in tqdm.tqdm(files, desc=f"Folder {path}"):
         object_name = os.path.split(file)[1][:-len(".npy")]
-        label = get_object_label(object_name, labels)
+        label = get_object_label(object_name, labels, regexes)
         if label:
             arr = np.load(file)
             if np.any(arr < 0):
@@ -72,12 +74,17 @@ def get_labeled_data(data: Dict[str, np.array], labels: List[str]) -> Dict[str, 
     
     return labeled_data
 
-def get_object_label(name, labels):
-    name = name.lower().replace("_", "").replace("-", "")
-    for label in labels:
+def get_object_label(name, labels, regexes=None):
+    name2 = name.lower().replace("_", "").replace("-", "")
+    for i, label in enumerate(labels):
         label2 = label.lower().replace("_", "").replace("-", "")
-        if label2 in name.lower() and not "deb" in name.lower():
-            return label
+
+        if regexes is not None:
+            if re.search(regexes[i], name, re.IGNORECASE):
+                return label            
+        else:
+            if label2 in name2.lower() and not "deb" in name2.lower():
+                return label
     return None
 
 def get_non_zero_ratio(data: np.array) -> np.array:
