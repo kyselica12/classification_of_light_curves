@@ -53,16 +53,16 @@ def apply_sequential_filters(data, filters):
     return data
 
 
-def filter_data(data, filter_config:FilterConfig):
+def filter_data(data, cfg: FilterConfig):
 
     filters = []
-    filters.append(partial(get_filter_continuous, n_bins=filter_config.n_bins, 
-                                                gap=filter_config.n_gaps, 
-                                                continous_gap=filter_config.gap_size))
-    filters.append(partial(get_filter_ratio, ratio=filter_config.non_zero_ratio))
+    filters.append(partial(get_filter_continuous, n_bins=cfg.n_bins, 
+                                                gap=cfg.n_gaps, 
+                                                continous_gap=cfg.gap_size))
+    filters.append(partial(get_filter_ratio, ratio=cfg.non_zero_ratio))
 
-    if filter_config.rms_ratio != 0:
-        filters.append(partial(get_rms_filter, rms_ratio=filter_config.rms_ratio))
+    if cfg.rms_ratio != 0:
+        filters.append(partial(get_rms_filter, rms_ratio=cfg.rms_ratio))
     # app_filters_p = partial(apply_filters, filters_f=filters, operation="AND")
     app_filters_p = partial(apply_sequential_filters, filters=filters)
     filtered_data = dict_map(data, app_filters_p)

@@ -9,7 +9,7 @@ def plot_curves(data, n_cols=2, save_path=None, titles=None, fit=False):
     n_rows =  ceil(len(data)/n_cols)
 
     fig, axs = plt.subplots(n_rows, n_cols, sharex=True, sharey=True)
-    fig.set_size_inches(2.5*n_cols, 2.7*n_rows)
+    fig.set_size_inches(5*n_cols, 2.7*n_rows)
 
     for i in range(n_rows):
         for j in range(n_cols):
