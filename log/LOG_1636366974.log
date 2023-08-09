@@ -1,0 +1,4 @@
+INFO:root:Call: main.py -i C:/Users/danok/work/charon_share/data -o C:/Users/danok/work/dizertacka/data -l 1000 -t 50.0 -w 1
+INFO:Preprocessing:preprocessing innit -> array_size: 1000, len_threshold: 50.0, window_size: 1
+INFO:Preprocessing:run method -> input: C:/Users/danok/work/charon_share/data, output: C:/Users/danok/work/dizertacka/data.
+ERROR:Preprocessing:Error ocured in reading file: C:/Users/danok/work/charon_share/data/periods\3_periods.txt [Errno 2] No such file or directory: 'C:/Users/danok/work/dizertacka/data/ATLAS_CENTAUR_R|B_multi_array.npy'
