@@ -1,0 +1,3 @@
+INFO:root:Call: main.py -i C:\Users\danok\Documents\charon_share\data -o C:/Users/danok/work/dizertacka/data -l 1000 -t 50.0 -w 1
+INFO:Preprocessing:preprocessing innit -> array_size: 1000, len_threshold: 50.0, window_size: 1
+INFO:Preprocessing:run method -> input: C:\Users\danok\Documents\charon_share\data, output: C:/Users/danok/work/dizertacka/data.

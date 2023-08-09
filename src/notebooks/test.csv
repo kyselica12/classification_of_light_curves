@@ -1,0 +1,81 @@
+,Label,cz_3,falcon_9,atlas,h2a,globalstar,name,epochs,net,train_loss,train_acc,val_loss,val_acc,precision,recall,f1_score
+0,cz_3,451,3292,2609,772,45,Fourier_FC_9_2_2023_3000_v3.1_588260,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01683690369435081,53.76922430456341,0.021812775106039444,25.067064083457527,6.2909750313851305,94.94736842105263,11.800104657247514
+1,falcon_9,17,305,72,46,1,Fourier_FC_9_2_2023_3000_v3.1_588260,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01683690369435081,53.76922430456341,0.021812775106039444,25.067064083457527,69.1609977324263,7.930317212688507,14.229064613949149
+2,atlas,5,195,226,81,45,Fourier_FC_9_2_2023_3000_v3.1_588260,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01683690369435081,53.76922430456341,0.021812775106039444,25.067064083457527,40.94202898550724,7.488402915838304,12.66106442577031
+3,h2a,0,38,12,426,7,Fourier_FC_9_2_2023_3000_v3.1_588260,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01683690369435081,53.76922430456341,0.021812775106039444,25.067064083457527,88.19875776397515,28.155981493721082,42.68537074148296
+4,globalstar,2,16,99,188,1115,Fourier_FC_9_2_2023_3000_v3.1_588260,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01683690369435081,53.76922430456341,0.021812775106039444,25.067064083457527,78.52112676056338,91.92085737840065,84.6942650968477
+0,cz_3,19,4804,1679,628,39,Fourier_FC_9_2_2023_3000_v3.1_989980qqqq,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01713487061216233,52.89520127741827,0.023009728323240514,20.705414803775458,0.2650299902357372,100.0,0.528658875904285
+1,falcon_9,0,376,35,29,1,Fourier_FC_9_2_2023_3000_v3.1_989980qqqq,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01713487061216233,52.89520127741827,0.023009728323240514,20.705414803775458,85.26077097505669,6.828913912095895,12.64503110812174
+2,atlas,0,251,193,68,40,Fourier_FC_9_2_2023_3000_v3.1_989980qqqq,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01713487061216233,52.89520127741827,0.023009728323240514,20.705414803775458,34.96376811594203,9.502708025603152,14.943863724351528
+3,h2a,0,46,13,421,3,Fourier_FC_9_2_2023_3000_v3.1_989980qqqq,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01713487061216233,52.89520127741827,0.023009728323240514,20.705414803775458,87.16356107660455,31.16210214655811,45.910577971646674
+4,globalstar,0,29,111,205,1075,Fourier_FC_9_2_2023_3000_v3.1_989980qqqq,10,"FCNet(
+  (layers): Sequential(
+    (0): Linear(in_features=17, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (logsoftmax): LogSoftmax(dim=1)
+)",0.01713487061216233,52.89520127741827,0.023009728323240514,20.705414803775458,75.70422535211267,92.83246977547496,83.39798293250583
