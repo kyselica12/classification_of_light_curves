@@ -16,6 +16,7 @@ def plot_curves(data, n_cols=2, save_path=None, titles=None, fit=False):
             lc = data[i*n_cols+j]
             x = np.linspace(0,1, endpoint=True, num=300)[lc != 0]
             y = lc[lc != 0]
+            axs[i,j].invert_yaxis()
             axs[i,j].scatter(x, y, s=1)
 
             if fit:

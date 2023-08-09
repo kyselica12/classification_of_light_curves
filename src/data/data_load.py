@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import Callable, Dict, List
+import pandas as pd
 import numpy as np
 import tqdm
 import glob
@@ -8,7 +9,7 @@ import re
 
 from collections import defaultdict
 
-from data.load_multi_array import load_multi_array
+from src.data.load_multi_array import load_multi_array
 
 def load_data_multi_array(path, labels, convert_to_mag=False):
     data = defaultdict(list)
@@ -39,14 +40,15 @@ def load_data(path, labels, regexes=None, convert_to_mag=False):
         label = get_object_label(object_name, labels, regexes)
         if label:
             arr = np.load(file)
-            if np.any(arr < 0):
-                arr += np.abs(np.min(arr)) + 0.000000001
+            # if np.any(arr < 0):   # Magnitute can be negative
+            #     arr += np.abs(np.min(arr)) + 0.000000001
             if convert_to_mag:
                 arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
             print(f"Label: {label} {len(arr)} examples.")
             data[label] = arr
 
     return data
+
 
 def load_all_data(path: str) -> Dict[str, np.array]:
     data = defaultdict(list)

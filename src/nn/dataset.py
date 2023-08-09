@@ -1,8 +1,10 @@
 import numpy as np
 from torch.utils.data import Dataset
 import random
+from scipy import optimize
+from pydoc import locate
 
-from config import DataConfig, AugmentationConfig
+from src.config import DataConfig
 
 class NetDataset(Dataset):
 
@@ -10,14 +12,15 @@ class NetDataset(Dataset):
         self.data = data
         self.labels = labels
 
-        self._normalize_data()
+        NetDataset._normalize_data(self.data)
+    
+    @staticmethod
+    def _normalize_data(data):
+        max_value = np.array([np.max(d[d!=0]) for d in data])
+        min_value = np.array([np.min(d[d!=0]) for d in data])
 
-    def _normalize_data(self):
-        max_value = np.array([np.max(d[d!=0]) for d in self.data])
-        min_value = np.array([np.min(d[d!=0]) for d in self.data])
-
-        for i in range(len(self.data)):
-            d = self.data[i]
+        for i in range(len(data)):
+            d = data[i]
             if max_value[i] != 0:
                 d[d==0] = -1
                 diff = max_value[i] - min_value[i]
@@ -123,25 +126,97 @@ class AugmentedBalancedDataset(NetDataset):
 
         return data
 
-def create_dataset(data, labels, cfg: AugmentationConfig):
+class FourierDataset(Dataset):
 
-    if cfg:
-        return AugmentedBalancedDataset(data, labels,
-                                        roll=cfg.roll, 
-                                        add_gaps=cfg.add_gaps,
-                                        add_noise=cfg.add_noise,
-                                        max_noise=cfg.max_noise,
-                                        num_gaps=cfg.num_gaps,
-                                        min_gap_len=cfg.min_gap_len,
-                                        max_gap_len=cfg.max_gap_len,
-                                        gap_prob=cfg.gap_prob,
-                                        use_original_data=cfg.keep_original,
-                                        min_num_examples=cfg.min_examples
-        )
+    def __init__(self, data, labels, std, residuals, rms, amplitude) -> None:
+        
+        self.use_std = std
+        self.use_residuals = residuals
+        self.use_rms = rms
+        self.use_amplitude = amplitude
+        
+        self.data = np.array(list(map(self._preprocess_example, data)))
+        self.labels = labels
 
-    return NetDataset(data, labels)
 
-def split_data(labeled_data, labels, validation_split=0.1):
+    
+    def _fourier8(self, x, a0, a1, a2, a3, a4, a5, a6, a7, a8, b1, b2, b3, b4, b5, b6, b7, b8):
+        pi = np.pi
+        y = a0 + a1 * np.cos(x * 2*pi) + b1 * np.sin(x * 2*pi) + \
+            a2 * np.cos(2 * x * 2*pi) + b2 * np.sin(2 * x * 2*pi)+ \
+            a3 * np.cos(3 * x * 2*pi) + b3 * np.sin(3 * x * 2*pi) + \
+            a4 * np.cos(4 * x * 2*pi) + b4 * np.sin(4 * x * 2*pi) + \
+            a5 * np.cos(5 * x * 2*pi) + b5 * np.sin(5 * x * 2*pi) + \
+            a6 * np.cos(6 * x * 2*pi) + b6 * np.sin(6 * x * 2*pi) + \
+            a7 * np.cos(7 * x * 2*pi) + b7 * np.sin(7 * x * 2*pi) + \
+            a8 * np.cos(8 * x * 2*pi) + b8 * np.sin(8 * x * 2*pi) 
+        return y
+
+    def _push_to_max(self, example):
+
+        example[example == 0] = np.inf
+
+        minimal_y_value = np.amin(example)
+        index_minimal = np.where(example == minimal_y_value)[0][0]
+        
+        example = np.roll(example, -index_minimal)
+        
+        example[example == np.inf] = 0
+        
+        return example
+
+    def _foufit(self, example):
+        example = self._push_to_max(example)
+        phases = np.linspace(0, 1, len(example), endpoint=False)
+
+        non_zero = example != 0
+        xs = phases[non_zero]
+        ys = example[non_zero]
+
+        params, params_covariance = optimize.curve_fit(self._fourier8, xs, ys, absolute_sigma=False, method="lm", maxfev=10000)
+        std = np.sqrt(np.diag(params_covariance))
+
+        y_hat = self._fourier8(phases, *params)
+        
+        amplitude = np.max(y_hat) - np.min(y_hat)
+        
+        residuals = np.abs(example - y_hat) / (amplitude + 1e-6)
+        residuals[np.logical_not(non_zero)] = 0
+        
+        rms = np.sqrt(np.sum(residuals[non_zero]**2) / (residuals[non_zero].size-2))
+
+        return params, std, residuals, rms, amplitude
+
+    def _preprocess_example(self, example):
+        params, std, residuals, rms, amplitude = self._foufit(example)
+
+        res = params
+        
+        if self.use_std:
+            res = np.concatenate((res, std))
+        
+        if self.use_residuals:
+            res = np.concatenate((res, residuals))
+
+        if  self.use_rms:
+            res = np.concatenate((res, [rms]))
+        
+        if  self.use_amplitude:
+            res = np.concatenate((res, [amplitude]))
+
+        return res
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        arr = self.data[index]
+        label = self.labels[index]
+
+        return arr, label
+
+
+def split_data_to_test_validation(labeled_data, labels, max_number_of_training_examples=None, validation_split=0.1):
     X_test, X_train = [], []
     Y_test, Y_train = [], []
 
@@ -152,14 +227,19 @@ def split_data(labeled_data, labels, validation_split=0.1):
         N = int(len(x))
         y = [labels_id[obj]]*N
         
-        n = int(N * validation_split)
+        if max_number_of_training_examples is None:
+            max_number_of_training_examples = N
+        
+        n = int(N * (1 - validation_split))
+        n = min(n, max_number_of_training_examples)
+
         random.shuffle(x)
 
-        X_test.extend(x[:n])
-        Y_test.extend(y[:n])
+        X_test.extend(x[n:])
+        Y_test.extend(y[n:])
 
-        X_train.extend(x[n:])
-        Y_train.extend(y[n:])
+        X_train.extend(x[:n])
+        Y_train.extend(y[:n])
 
 
     X_train, X_test = np.array(X_train), np.array(X_test)
@@ -169,15 +249,16 @@ def split_data(labeled_data, labels, validation_split=0.1):
 
 def create_datasets(labeled_data, cfg:DataConfig):
 
-    (X_train, Y_train), (X_test, Y_test) = split_data(labeled_data, cfg.labels, cfg.validation_split)
+    (X_train, Y_train), (X_test, Y_test) = split_data_to_test_validation(labeled_data, cfg.labels, cfg.number_of_training_examples_per_class, cfg.validation_split)
 
     idx_train, idx_test = np.random.permutation(len(X_train)), np.random.permutation(len(X_test))
 
     X_train, X_test = X_train[idx_train], X_test[idx_test]
     Y_train, Y_test = Y_train[idx_train], Y_test[idx_test]
 
-    val_set = create_dataset(X_test, Y_test, cfg.augmentation)
-    train_set = create_dataset(X_train, Y_train, cfg.augmentation)
+    DatasetClass = locate(f'src.nn.dataset.{cfg.dataset_class}')
+    val_set = DatasetClass(X_test, Y_test, **cfg.dataset_arguments)
+    train_set = DatasetClass(X_train, Y_train, **cfg.dataset_arguments)
 
     print(f"Training set: {len(train_set)}")
     print(f"Validation set: {len(val_set)}")
@@ -189,3 +270,10 @@ def create_datasets(labeled_data, cfg:DataConfig):
         np.save(f"{cfg.save_path}/test_y.np", Y_test)
 
     return train_set, val_set
+
+if __name__ == "__main__":
+    class_name = "FourierDataset"
+    c = locate(f'nn.dataset.{class_name}')
+    c2 = locate(f'src.nn.dataset.{class_name}')
+    
+    print(c, c2)

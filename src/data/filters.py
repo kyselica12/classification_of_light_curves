@@ -3,8 +3,8 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from functools import partial
 
-from data.data_load import dict_map
-from config import FilterConfig
+from src.data.data_load import dict_map
+from src.config import FilterConfig
 
 def get_filter_continuous(data, n_bins=10, gap=0, continous_gap=3):
     N = 300 // n_bins
@@ -67,7 +67,36 @@ def filter_data(data, cfg: FilterConfig):
     app_filters_p = partial(apply_sequential_filters, filters=filters)
     filtered_data = dict_map(data, app_filters_p)
 
+    print("-------------- Filtered ---------------")
+    for label in filtered_data:
+        print(f"Label: {label} {len(filtered_data[label])}, {len(data[label])} examples.")
+
     return filtered_data
+
+'''  
+More readable version of filtering 
+
+def filter_data2(data, cfg: FilterConfig):
+    print("-------------- Filtered ---------------")
+    print(cfg)
+
+    filtered = {}
+    for key, value in data.items():
+        ok_c = get_filter_continuous(value, n_bins=cfg.n_bins, gap=cfg.n_gaps, continous_gap=cfg.gap_size)
+        ok_nz = get_filter_ratio(value, ratio=cfg.non_zero_ratio)
+
+        ok = np.logical_and(ok_c, ok_nz)
+
+        if cfg.rms_ratio != 0:
+            ok_rms = get_rms_filter(value,  rms_ratio=cfg.rms_ratio)
+            ok = np.logical_and(ok, ok_rms)
+
+        filtered[key] = value[ok]
+        print(f"Label: {key} {len(ok)}, {np.sum(ok)}, {filtered[key].shape} examples. {np.sum(ok_c)}, {np.sum(ok_nz)} {ok_nz.shape}")
+
+    return filtered
+'''
+
 
 
 def get_rms_filter(data_list, rms_ratio=0.5):

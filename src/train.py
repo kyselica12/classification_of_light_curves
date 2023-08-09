@@ -1,23 +1,22 @@
-from data.data_load import load_data
-from data.filters import filter_data
-from nn.net import Net, evaulate_net
-from nn.dataset import create_datasets
-
 import pandas as pd
 import numpy as np
 import torch
+import os
 
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from nn.dataset import NetDataset, AugmentedBalancedDataset
-from config import DataConfig
+from src.data.data_load import load_data
+from src.data.filters import filter_data
+from src.nn.dataset import NetDataset, create_datasets
+from src.config import DataConfig
+from src.nn.net import BaseNet
 
 
 class Trainer:
 
     def __init__(self, net, sampler=False) -> None:
 
-        self.net = net
+        self.net: BaseNet = net
         self.train_set = []
         self.val_set = []
         self.sampler = None
@@ -50,6 +49,7 @@ class Trainer:
         X_test = np.load(f"{path}/val_x.npy")
         Y_test = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
 
+        #FIXME load to correct class
         self.val_set = NetDataset(X_test, Y_test)
         self.train_set = NetDataset(X_train, Y_train)     
     
@@ -59,26 +59,17 @@ class Trainer:
         self.net.train_model(self.train_loader, self.val_loader, epochs, 
                              reset_optimizer,tensorboard_on, save_interval, print_on, class_weights=self.class_weights)
 
-    def evaluate(self, labels=None):
+    def evaulate(self, labels, show=True, save_path=None):
         
         
         self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
         self.val_loader = DataLoader(self.val_set, batch_size=64)
 
-        if labels:
-            for i in range(len(labels)):
-                print(i, labels[i])
 
-        train_acc, train_loss, _ = evaulate_net(self.net, self.train_loader)
-        val_acc, val_loss, conf_matx = evaulate_net(self.net, self.val_loader)
-
-        print(f"Train:\n\tLoss: {train_loss}\n\tAcc: {train_acc}", flush=True)
-        print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
-        print("-----------------------------------------\n")
-        df_data = [[labels[i]] + list(conf_matx[i])  for i in range(len(labels))]
-        df = pd.DataFrame(df_data, columns=["Label"] + labels)
-        print(df)
-        print("\n-----------------------------------------\n")
+        train_acc, train_loss, _ = self.net.evaulate(self.train_loader) 
+        val_acc, val_loss, conf_matx = self.net.evaulate(self.val_loader)
+        confusion_matrix_data = [[labels[i]] + list(conf_matx[i])  for i in range(len(labels))]
+        df_confusion_matrix = pd.DataFrame(confusion_matrix_data, columns=["Label"] + labels)
 
         precision = []
         recall = []
@@ -89,8 +80,35 @@ class Trainer:
             r = conf_matx[i][i] / np.sum(conf_matx[:, i]) * 100
             recall.append(r)
 
-        df_precision = pd.DataFrame([precision, recall], ["Precision", "Recall"], labels)
+        f1_score = 2 * (np.array(precision) * np.array(recall)) / (np.array(precision) + np.array(recall))
+        
+        df_precision = pd.DataFrame([precision, recall, list(f1_score)], ["Precision", "Recall", "F1 score"], labels)
 
-        print(df_precision)
 
-        print("\n-----------------------------------------\n")
+
+        if show:
+            print(f"Train:\n\tLoss: {train_loss}\n\tAcc: {train_acc}", flush=True)
+            print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
+            print("-----------------------------------------\n")
+            print(df_confusion_matrix)
+            print("\n-----------------------------------------\n")
+            print(df_precision)
+            print("\n-----------------------------------------\n")
+
+        if save_path:
+            
+            df_out = df_confusion_matrix.copy()
+            df_out = df_out.assign(
+                name=self.net.name,
+                epochs=self.net.epoch_trained,
+                net=str(self.net),
+                train_loss=train_loss,
+                train_acc=train_acc,
+                val_loss=val_loss,
+                val_acc=val_acc,
+                precision=precision,
+                recall=recall,
+                f1_score=list(f1_score)
+                )
+
+            df_out.to_csv(save_path, mode='a', header=not os.path.exists(save_path))
