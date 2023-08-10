@@ -2,7 +2,7 @@ import os
 
 from src.config import Config, PACKAGE_PATH
 from src.train import Trainer
-from src.nn.utils import get_new_net, load_net
+from src.nn.networks.utils import get_new_net, load_net
 
 def create_ouput_folders(folder_name):
     for f in ["models", "datasets","configurations"]:
@@ -14,7 +14,7 @@ def load_dataset_to_trainer(trainer: Trainer, folder_name, cfg: Config):
     dataset_name = f"{cfg.data_config.filter.n_bins}_{cfg.data_config.filter.n_gaps}_{cfg.data_config.filter.gap_size}_{int(cfg.data_config.filter.non_zero_ratio * 10)}_{cfg.data_config.number_of_training_examples_per_class}"
 
     if os.path.exists(f"{dataset_path}/{dataset_name}"):
-        trainer.load_data_from_file(f"{dataset_path}/{dataset_name}")
+        trainer.load_data_from_file(f"{dataset_path}/{dataset_name}", cfg.data_config)
     else:
         trainer.load_data(cfg.data_config)
         os.makedirs(f"{dataset_path}/{dataset_name}", exist_ok=True)

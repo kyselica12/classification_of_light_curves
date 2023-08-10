@@ -42,7 +42,7 @@ def load_net(cfg: NetConfig, seed, checkpoint="latest"):
     return net
 
 def locate_net_class(name):
-    class_path = f"src.nn.{name.lower()}.{name}"
+    class_path = f"src.nn.networks.{name.lower()}.{name}"
     print(class_path)
     NetClass = locate(class_path)
     return NetClass

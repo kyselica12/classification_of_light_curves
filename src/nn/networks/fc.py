@@ -2,7 +2,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 
-from src.nn.net import BaseNet
+from src.nn.networks.net import BaseNet
 
 
 class FC(BaseNet):

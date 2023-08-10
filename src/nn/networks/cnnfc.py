@@ -5,9 +5,9 @@ import torch.nn as nn
 import torch
 
 from src.config import BasicCNNConfig, FCConfig, NetConfig
-from src.nn.cnn import CNN
-from src.nn.fc import FC
-from src.nn.net import BaseNet
+from src.nn.networks.cnn import CNN
+from src.nn.networks.fc import FC
+from src.nn.networks.net import BaseNet
 
 class CNNFC(BaseNet):
 

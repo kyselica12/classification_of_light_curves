@@ -7,9 +7,10 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from src.data.data_load import load_data
 from src.data.filters import filter_data
-from src.nn.dataset import NetDataset, create_datasets
+from src.nn.datasets.basic import BasicDataset
+from src.nn.datasets.utils import create_datasets, find_dataset_class
 from src.config import DataConfig
-from src.nn.net import BaseNet
+from src.nn.networks.net import BaseNet
 
 
 class Trainer:
@@ -43,15 +44,17 @@ class Trainer:
         np.save(f"{path}/val_x.npy", self.val_set.data)
         np.save(f"{path}/val_y.npy", self.val_set.labels)
 
-    def load_data_from_file(self, path):
-        X_train = np.load(f"{path}/train_x.npy")
-        Y_train = np.load(f"{path}/train_y.npy").astype(dtype=np.int32)
-        X_test = np.load(f"{path}/val_x.npy")
-        Y_test = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
+    def load_data_from_file(self, path, cfg: DataConfig):
+        DatasetClass = find_dataset_class(cfg.dataset_class)
 
-        #FIXME load to correct class
-        self.val_set = NetDataset(X_test, Y_test)
-        self.train_set = NetDataset(X_train, Y_train)     
+        self.train_set = DatasetClass([],[],**cfg.dataset_arguments)
+        self.train_set.data = np.load(f"{path}/train_x.npy")
+        self.train_set.labels = np.load(f"{path}/train_y.npy").astype(dtype=np.int32)
+        
+        self.val_set = DatasetClass([],[],**cfg.dataset_arguments)
+        self.val_set.data = np.load(f"{path}/val_x.npy")
+        self.val_set.labels = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
+
     
     def train(self, epochs: int, batch_size:int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
         self.train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)

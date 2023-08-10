@@ -6,3 +6,5 @@ src/__pycache__/
 src/data/__pycache__/
 src/experiments/__pycache__/
 src/nn/__pycache__/
+src/nn/datasets/__pycache__/
+src/nn/networks/__pycache__/

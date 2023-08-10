@@ -1,7 +1,7 @@
 import numpy as np
 import torch.nn as nn
 
-from src.nn.net import BaseNet
+from src.nn.networks.net import BaseNet
 
 class CNN(BaseNet):
     

@@ -75,7 +75,7 @@ class DataConfig:
     regexes: List[str] = None
     validation_split: float = 0.1
     filter: FilterConfig = None
-    dataset_class: str = "NetDataset"
+    dataset_class: str = "BasicDataset"
     dataset_arguments: dict = field(default_factory=dict)
     save_path: str = None
     number_of_training_examples_per_class: int = np.inf
