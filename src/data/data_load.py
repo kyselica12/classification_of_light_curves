@@ -30,7 +30,13 @@ def load_data_multi_array(path, labels, convert_to_mag=False):
 
     return data
 
-def load_data(path, labels, regexes=None, convert_to_mag=False):
+def load_data(path, labels, regexes=None, convert_to_mag=False, from_csv=False):
+    if from_csv:
+        return load_csv_data(path, labels, regexes, convert_to_mag)
+    else:
+        return load_npy_data(path, labels, regexes, convert_to_mag)
+
+def load_npy_data(path, labels, regexes=None, convert_to_mag=False):
     data = defaultdict(list)
         
     files = [p for p in glob.iglob(f"{path}/*.npy")]
@@ -48,6 +54,35 @@ def load_data(path, labels, regexes=None, convert_to_mag=False):
             data[label] = arr
 
     return data
+
+def load_csv_data(path, labels, regexes=None, convert_to_mag=False):
+
+    df = pd.read_csv(path, index_col=0)
+    data = defaultdict(list)
+
+    for name in df["Object name"].unique():
+
+        label = None
+
+        for i in range(len(labels)):
+            if re.search(regexes[i], name):
+                label = labels[i]
+                break
+        if label is None:
+            continue
+
+        df_object = df[df["Object name"] == name]
+        object_IDs = df_object["Object ID"].unique()
+
+        for object_ID in object_IDs:
+            df_object_ID = df_object[df_object["Object ID"] == object_ID]
+
+            arr = df_object_ID.to_numpy()[:, 4:]
+            if convert_to_mag:
+                arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
+            data[label].append(arr) 
+    
+    return data 
 
 
 def load_all_data(path: str) -> Dict[str, np.array]:

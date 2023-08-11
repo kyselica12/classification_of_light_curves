@@ -6,8 +6,8 @@ from src.config import Config, DataConfig, FilterConfig, PACKAGE_PATH, FourierDa
 from src.experiments.utils import run
 import tqdm
 
-FOLDER_NAME = "TEST"#"Fourier_FC_8_8_v1"
-EXPERIMENT_NAME = "TEST"#"Net_conf_Dataset_std_amp"
+FOLDER_NAME = "new_dataset_fc"#"Fourier_FC_8_8_v1"
+EXPERIMENT_NAME = "Architecture"
 
 EPOCHS = 1
 SAVE_INTERVAL = 1
@@ -32,15 +32,15 @@ net_config = NetConfig(
 )
 
 data_config = DataConfig(
-        path=f"{PACKAGE_PATH}/resources/mmt_13_3_2023/",
+        path=f"{PACKAGE_PATH}/resources/Fall_2021_R_B_globalstar.csv",
+        from_csv=True,
         labels=["cz_3", "falcon_9", "atlas",  "h2a", "globalstar"],
+        regexes=[r'CZ-3B.*', r'FALCON_9.*', r'ATLAS_[5|V]_CENTAUR_R\|B$',  r'H-2A.*', r'GLOBALSTAR.*'],
         convert_to_mag=False,
-        number_of_training_examples_per_class = 10000,
-        validation_split = 0.2,
+        number_of_training_examples_per_class = 2000,
+        validation_split = 0.1,
         dataset_class="FourierDataset",
         dataset_arguments=FourierDatasetConfig(
-            std=True,
-            amplitude=True
         ).__dict__,
         filter=FilterConfig(
             n_bins= 30,
@@ -51,18 +51,22 @@ data_config = DataConfig(
         )
 )
 
+data_config.save_path = f"Fourier_params_{data_config.number_of_training_examples_per_class}_{data_config.validation_split}"
+
 cfg = Config(net_config=net_config, data_config=data_config)
 
 
 NET_CONFIGS = [
     [128],
-    # [256],
-    # [512],
-    # [128, 128],
-    # [128, 256],
-    # [128, 256, 512],
-    # [128, 256, 128],
-    # [256, 512, 256],
+    [256],
+    [512],
+    [128, 128],
+    [128, 256],
+    [128, 256, 512],
+    [128, 256, 128],
+    [256, 512, 256],
+    [128, 256, 512, 256]
+    [128, 256, 512, 256, 128]
 ]
 
 

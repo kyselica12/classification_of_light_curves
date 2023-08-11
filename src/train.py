@@ -26,9 +26,11 @@ class Trainer:
         self.val_loader = None
 
     def load_data(self, cfg: DataConfig):
-        self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag)
+        #TODO refactor data loading
+        # + CSV option in data loading
+        self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag, cfg.from_csv)
         if cfg.filter:
-            self.data = filter_data(self.data, cfg.filter)
+            self.data = filter_data(self.data, cfg.filter, cfg.from_csv)
 
         self.train_set, self.val_set = create_datasets(self.data, cfg)
 

@@ -52,8 +52,13 @@ def apply_sequential_filters(data, filters):
 
     return data
 
+def filter_data(data, cfg:FilterConfig, from_csv=False):
+    if from_csv:
+        return filter_csv_data(data, cfg)
+    else:
+        return filter_npy_data(data, cfg)
 
-def filter_data(data, cfg: FilterConfig):
+def filter_npy_data(data, cfg: FilterConfig):
 
     filters = []
     filters.append(partial(get_filter_continuous, n_bins=cfg.n_bins, 
@@ -72,6 +77,50 @@ def filter_data(data, cfg: FilterConfig):
         print(f"Label: {label} {len(filtered_data[label])}, {len(data[label])} examples.")
 
     return filtered_data
+
+def filter_csv_data(data, cfg: FilterConfig):
+    filters = []
+    filters.append(partial(get_filter_continuous, n_bins=cfg.n_bins, 
+                                                gap=cfg.n_gaps, 
+                                                continous_gap=cfg.gap_size))
+    filters.append(partial(get_filter_ratio, ratio=cfg.non_zero_ratio))
+
+    if cfg.rms_ratio != 0:
+        filters.append(partial(get_rms_filter, rms_ratio=cfg.rms_ratio))
+    # app_filters_p = partial(apply_filters, filters_f=filters, operation="AND")
+    app_filters_p = partial(apply_sequential_filters, filters=filters)
+
+    for label in data:
+        tmp = []
+        for d in data[label]:
+            r = app_filters_p(d)
+            if len(r) > 0:
+                tmp.append(r)
+        data[label] = tmp
+    
+    return data
+
+
+def filter_data_from_csv_format(data, cfg: FilterConfig):
+    filters = []
+    filters.append(partial(get_filter_continuous, n_bins=cfg.n_bins, 
+                                                gap=cfg.n_gaps, 
+                                                continous_gap=cfg.gap_size))
+    filters.append(partial(get_filter_ratio, ratio=cfg.non_zero_ratio))
+
+    app_filters_p = partial(apply_sequential_filters, filters=filters)
+
+    filtered_data = {}
+    for label in data:
+        tmp = []
+        for d in data[label]:
+            r = app_filters_p(d)
+            if len(r) > 0:
+                tmp.append(r)
+        filtered_data[label] = tmp
+    
+    return filtered_data
+
 
 '''  
 More readable version of filtering 

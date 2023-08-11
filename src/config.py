@@ -79,6 +79,7 @@ class DataConfig:
     dataset_arguments: dict = field(default_factory=dict)
     save_path: str = None
     number_of_training_examples_per_class: int = np.inf
+    from_csv: bool = False
     
 @dataclass_json
 @dataclass
