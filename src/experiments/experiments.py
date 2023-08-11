@@ -6,7 +6,7 @@ from src.config import Config, DataConfig, FilterConfig, PACKAGE_PATH, FourierDa
 from src.experiments.utils import run
 import tqdm
 
-FOLDER_NAME = "new_dataset_fc"#"Fourier_FC_8_8_v1"
+FOLDER_NAME = "new_dataset_fc_v2"#"Fourier_FC_8_8_v1"
 EXPERIMENT_NAME = "Architecture"
 
 EPOCHS = 500
@@ -37,7 +37,7 @@ data_config = DataConfig(
         labels=["cz_3", "falcon_9", "atlas",  "h2a", "globalstar"],
         regexes=[r'CZ-3B.*', r'FALCON_9.*', r'ATLAS_[5|V]_CENTAUR_R\|B$',  r'H-2A.*', r'GLOBALSTAR.*'],
         convert_to_mag=False,
-        number_of_training_examples_per_class = 2000,
+        number_of_training_examples_per_class = 10000,
         validation_split = 0.1,
         dataset_class="FourierDataset",
         dataset_arguments=FourierDatasetConfig(
