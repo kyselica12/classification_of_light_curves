@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import optimize
 
+import tqdm
+
 from src.nn.datasets.basic import BasicDataset
 
 
@@ -13,7 +15,11 @@ class FourierDataset(BasicDataset):
         self.use_rms = rms
         self.use_amplitude = amplitude
         
-        self.data = np.array(list(map(self._preprocess_example, data)))
+        self.data = []
+        for example in tqdm.tqdm(data, desc="Computing Fourier"):
+            self.data.append(self._preprocess_example(example))
+        self.data = np.array(self.data)
+
         self.labels = labels
 
 
@@ -63,7 +69,7 @@ class FourierDataset(BasicDataset):
         
         rms = np.sqrt(np.sum(residuals[non_zero]**2) / (residuals[non_zero].size-2))
 
-        return params, std, residuals, rms, amplitude
+        return params[1:], std[1:], residuals, rms, amplitude
 
     def _preprocess_example(self, example):
         params, std, residuals, rms, amplitude = self._foufit(example)

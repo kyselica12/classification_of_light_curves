@@ -11,15 +11,14 @@ def create_ouput_folders(folder_name):
 def load_dataset_to_trainer(trainer: Trainer, folder_name, cfg: Config):
     dataset_path = f"{PACKAGE_PATH}/output/datasets/{folder_name}"
 
-    dataset_name = cfg.data_config.save_path
+    dataset_name = f"{cfg.data_config.filter.n_bins}_{cfg.data_config.filter.n_gaps}_{cfg.data_config.filter.gap_size}_{int(cfg.data_config.filter.non_zero_ratio * 10)}_{cfg.data_config.number_of_training_examples_per_class}"
 
     if os.path.exists(f"{dataset_path}/{dataset_name}"):
         trainer.load_data_from_file(f"{dataset_path}/{dataset_name}", cfg.data_config)
     else:
         trainer.load_data(cfg.data_config)
         os.makedirs(f"{dataset_path}/{dataset_name}", exist_ok=True)
-        if cfg.data_config.save_path is not None:
-            trainer.save_data(f"{dataset_path}/{dataset_name}")
+        trainer.save_data(f"{dataset_path}/{dataset_name}")
 
 
 def run(folder_name, 

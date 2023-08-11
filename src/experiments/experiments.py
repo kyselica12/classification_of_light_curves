@@ -9,8 +9,8 @@ import tqdm
 FOLDER_NAME = "new_dataset_fc"#"Fourier_FC_8_8_v1"
 EXPERIMENT_NAME = "Architecture"
 
-EPOCHS = 1
-SAVE_INTERVAL = 1
+EPOCHS = 500
+SAVE_INTERVAL = 100
 BATCH_SIZE = 64
 SAMPLER = True
 OUTPUT_CSV_PATH = f'{PACKAGE_PATH}/output/{EXPERIMENT_NAME}_results.csv'
@@ -22,7 +22,7 @@ CHECKPOINT = "latest"
 net_config = NetConfig(
         name=f"{EXPERIMENT_NAME}",
         net_class="FC",
-        input_size=17 + 17 + 1,
+        input_size=16,
         n_classes=5,
         device="cuda:0",
         save_path=f"{PACKAGE_PATH}/output/models/{FOLDER_NAME}/",
@@ -51,8 +51,6 @@ data_config = DataConfig(
         )
 )
 
-data_config.save_path = f"Fourier_params_{data_config.number_of_training_examples_per_class}_{data_config.validation_split}"
-
 cfg = Config(net_config=net_config, data_config=data_config)
 
 
@@ -65,7 +63,7 @@ NET_CONFIGS = [
     [128, 256, 512],
     [128, 256, 128],
     [256, 512, 256],
-    [128, 256, 512, 256]
+    [128, 256, 512, 256],
     [128, 256, 512, 256, 128]
 ]
 
