@@ -28,12 +28,12 @@ def run(folder_name,
 
     create_ouput_folders(folder_name)
     
-    trainer = Trainer(None)
+    trainer = Trainer(None, cfg.net_config, cfg.device)
 
     load_dataset_to_trainer(trainer, folder_name, cfg)
 
     if load:
-        trainer.net = load_net(cfg, seed=seed, checkpoint=checkpoint)
+        trainer.net = load_net(cfg.net_config, seed=seed, checkpoint=checkpoint)
     else:
         trainer.net = get_new_net(cfg, f"{PACKAGE_PATH}/output/configurations/{folder_name}/{cfg.net_config.name}.json")
 
@@ -42,5 +42,5 @@ def run(folder_name,
 
     for i in range(0,epochs, epoch_save_interval):
         trainer.train(epoch_save_interval, batch_size, tensorboard_on=True, save_interval=None, print_on=False)
-        trainer.evaulate(cfg.data_config.labels, save_path=output_csv_path)
+        trainer.performance_stats(cfg.data_config.labels, save_path=output_csv_path)
     

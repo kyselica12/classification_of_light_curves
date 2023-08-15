@@ -9,53 +9,7 @@ import re
 
 from collections import defaultdict
 
-from src.data.load_multi_array import load_multi_array
-
-def load_data_multi_array(path, labels, convert_to_mag=False):
-    data = defaultdict(list)
-        
-    files = [p for p in glob.iglob(f"{path}/*_multi_array.npy")]
-
-    for file in tqdm.tqdm(files, desc=f"Folder {path}"):
-        object_name = os.path.split(file)[1][:-len("_multi_array.npy")]
-        label = get_object_label(object_name, labels)
-        if label:
-            arr = load_multi_array(file)
-            if convert_to_mag:
-                arr = -2.5 * np.log10(arr)
-            data[label].extend(arr)
-
-    for key in data:
-        data[key] = np.array(data[key])
-
-    return data
-
-def load_data(path, labels, regexes=None, convert_to_mag=False, from_csv=False):
-    if from_csv:
-        return load_csv_data(path, labels, regexes, convert_to_mag)
-    else:
-        return load_npy_data(path, labels, regexes, convert_to_mag)
-
-def load_npy_data(path, labels, regexes=None, convert_to_mag=False):
-    data = defaultdict(list)
-        
-    files = [p for p in glob.iglob(f"{path}/*.npy")]
-
-    for file in tqdm.tqdm(files, desc=f"Folder {path}"):
-        object_name = os.path.split(file)[1][:-len(".npy")]
-        label = get_object_label(object_name, labels, regexes)
-        if label:
-            arr = np.load(file)
-            # if np.any(arr < 0):   # Magnitute can be negative
-            #     arr += np.abs(np.min(arr)) + 0.000000001
-            if convert_to_mag:
-                arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
-            print(f"Label: {label} {len(arr)} examples.")
-            data[label] = arr
-
-    return data
-
-def load_csv_data(path, labels, regexes=None, convert_to_mag=False):
+def load_data(path, labels, regexes=None, convert_to_mag=False):
 
     df = pd.read_csv(path, index_col=0)
     data = defaultdict(list)
@@ -83,33 +37,6 @@ def load_csv_data(path, labels, regexes=None, convert_to_mag=False):
             data[label].append(arr) 
     
     return data 
-
-
-def load_all_data(path: str) -> Dict[str, np.array]:
-    data = defaultdict(list)
-        
-    files = [p for p in glob.iglob(f"{path}/*_multi_array.npy")]
-
-    for file in tqdm.tqdm(files, desc=f"Folder {path}"):
-        object_name = os.path.split(file)[1][:-len("_multi_array.npy")]
-        arr = load_multi_array(file)
-        data[object_name].extend(arr)
-
-    for key in data:
-        data[key] = np.array(data[key])
-
-    return data
-
-def get_labeled_data(data: Dict[str, np.array], labels: List[str]) -> Dict[str, np.array]:
-
-    labeled_data = defaultdict(lambda: np.empty((0,300)))
-
-    for name in data:
-        label = get_object_label(name, labels)
-        if label:
-            labeled_data[label] = np.append(labeled_data[label], data[name], axis=0)
-    
-    return labeled_data
 
 def get_object_label(name, labels, regexes=None):
     name2 = name.lower().replace("_", "").replace("-", "")

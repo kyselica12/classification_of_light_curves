@@ -1,40 +1,54 @@
-from copy import deepcopy
-
-import numpy as np
-import torch.nn as nn
 import torch
 
-from src.config import BasicCNNConfig, FCConfig, NetConfig
+from src.config import CNNFCConfig, FCConfig, CNNConfig
 from src.nn.networks.cnn import CNN
 from src.nn.networks.fc import FC
 from src.nn.networks.net import BaseNet
 
 class CNNFC(BaseNet):
 
-    def _initialize(self, cnn_args, fc_args):   
-        cnn_config: BasicCNNConfig = BasicCNNConfig(**cnn_args)
-        fc_config: FCConfig = FCConfig(**fc_args)
+    def __init__(self, cfg: CNNFCConfig):   
+        super().__init__()
+        self.cfg = cfg
 
-        #TODO: send good input size
-        cnn_net_config: NetConfig = deepcopy(self.cfg)
-        cnn_net_config.net_args = cnn_config.__dict__
-        self.cnn = CNN(cnn_net_config)
-        
-        fc_net_config: NetConfig = deepcopy(self.cfg)
-        fc_net_config.net_args = fc_config.__dict__
-        self.fc = FC(fc_net_config)
+        self.cnn = CNN(
+            CNNConfig(
+                input_size=cfg.cnn_input_size,
+                output_size=cfg.output_size,
+                in_channels=cfg.in_channels,
+                conv_layers=cfg.cnn_layers,
+                classifier_layers=[]
+            )
+        )
 
-        self.final_layer = nn.Linear(cnn_config.hid_dim + fc_config.layers[-1], self.n_classes)
-        self.logsoftmax = nn.LogSoftmax(dim=1)
+        self.fc = FC(
+            FCConfig(
+                input_size=cfg.input_size-cfg.cnn_input_size*cfg.in_channels,
+                output_size=cfg.fc_output_dim,
+                layers=cfg.fc_layers
+            )
+        )
+
+        self.classifier = FC(
+            FCConfig(
+                input_size=cfg.fc_output_dim + self.cnn.hid_dim,
+                output_size=cfg.output_size,
+                layers=cfg.classifier_layers
+            )
+        )
+
    
     def forward(self, x):
-        x = torch.reshape(x, (-1, self.size))
-        
-        x1 = self.cnn.layers(x) #TODO reshape to correct shape
-        x2 = self.fc.layers(x)
 
-        x = torch.cat((x1, x2), dim=1)
-        self.final_layer(x)
+        fc_in = x[:, :-self.cfg.cnn_input_size]
+        cnn_in = x[:, -self.cfg.cnn_input_size:].reshape(-1, self.cfg.in_channels, self.cfg.cnn_input_size)
         
-        return self.logsoftmax(x)
+        fc_out = self.fc(fc_in)
+        cnn_out = self.cnn.layers(cnn_in)
+
+        x = torch.cat((fc_out, cnn_out), dim=1)
+        
+        x = self.classifier(x)
+        
+        return x
 

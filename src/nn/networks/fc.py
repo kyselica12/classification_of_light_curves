@@ -3,27 +3,25 @@ import torch.nn as nn
 import torch
 
 from src.nn.networks.net import BaseNet
-
+from src.config import FCConfig
 
 class FC(BaseNet):
 
-    def _initialize(self, layers):   
-        list_layers = []
-        prev = self.size
+    def __init__(self, cfg: FCConfig):
+        super().__init__()
+        self.cfg = cfg
+        layers_config = [cfg.input_size] + cfg.layers + [cfg.output_size]
 
-        for i in range(len(layers)):
-            list_layers.append(nn.Linear(prev, layers[i]))
-            list_layers.append(nn.ReLU())
-            prev = layers[i]
+        layers = []
 
-        self.final_layer = nn.Linear(prev, self.n_classes)
-        self.layers = nn.Sequential(*list_layers)
-        self.logsoftmax = nn.LogSoftmax(dim=1)
+        for i in range(1, len(layers_config)):
+            layers.append(nn.Linear(layers_config[i-1], layers_config[i]))
+            layers.append(nn.ReLU())
+
+        self.layers = nn.Sequential(*layers)
+
    
     def forward(self, x):
-        x = torch.reshape(x, (-1, self.size))
-    
+        x = torch.reshape(x, (-1, self.cfg.input_size))    
         x = self.layers(x)
-        x = self.final_layer(x)
-
-        return self.logsoftmax(x)
+        return x

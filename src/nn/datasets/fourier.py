@@ -8,17 +8,19 @@ from src.nn.datasets.basic import BasicDataset
 
 class FourierDataset(BasicDataset):
 
-    def __init__(self, data, labels, std, residuals, rms, amplitude) -> None:
+    def __init__(self, data, labels, fourier, std, residuals, rms, amplitude, lc) -> None:
         
+        self.use_fourier_params = fourier
         self.use_std = std
         self.use_residuals = residuals
         self.use_rms = rms
         self.use_amplitude = amplitude
+        self.use_lc = lc
         
         self.data = []
         for example in tqdm.tqdm(data, desc="Computing Fourier"):
             self.data.append(self._preprocess_example(example))
-        self.data = np.array(self.data)
+        self.data = np.array(self.data).astype(np.float32)
 
         self.labels = labels
 
@@ -65,28 +67,36 @@ class FourierDataset(BasicDataset):
         amplitude = np.max(y_hat) - np.min(y_hat)
         
         residuals = np.abs(example - y_hat) / (amplitude + 1e-6)
+        lc_normalized = (example - np.mean(example)) / (amplitude + 1e-6)
+
         residuals[np.logical_not(non_zero)] = 0
         
         rms = np.sqrt(np.sum(residuals[non_zero]**2) / (residuals[non_zero].size-2))
 
-        return params[1:], std[1:], residuals, rms, amplitude
+        return params[1:], std[1:], residuals, lc_normalized, rms, amplitude
 
     def _preprocess_example(self, example):
-        params, std, residuals, rms, amplitude = self._foufit(example)
+        params, std, residuals, lc_normalized, rms, amplitude = self._foufit(example)
 
-        res = params
+        res = np.empty((0,))
+
+        if  self.use_fourier_params:
+            res = np.concatenate((res, params))
         
         if self.use_std:
             res = np.concatenate((res, std))
-        
-        if self.use_residuals:
-            res = np.concatenate((res, residuals))
 
         if  self.use_rms:
             res = np.concatenate((res, [rms]))
         
         if  self.use_amplitude:
             res = np.concatenate((res, [amplitude]))
+
+        if self.use_residuals:
+            res = np.concatenate((res, residuals))
+
+        if  self.use_lc:
+            res = np.concatenate((res, lc_normalized))
 
         return res
 

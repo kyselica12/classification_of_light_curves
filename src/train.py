@@ -4,39 +4,59 @@ import torch
 import os
 
 from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch import optim
+import torch.nn as nn
+from torch.utils.data import DataLoader
+import torch
+from torch.utils.tensorboard import SummaryWriter
+import tqdm
+import glob
+import os
+import random
+import numpy as np
+from sklearn.metrics import confusion_matrix
+from abc import ABC, abstractmethod
+
 
 from src.data.data_load import load_data
 from src.data.filters import filter_data
-from src.nn.datasets.basic import BasicDataset
 from src.nn.datasets.utils import create_datasets, find_dataset_class
-from src.config import DataConfig
+from src.config import DataConfig, PACKAGE_PATH, NetConfig
 from src.nn.networks.net import BaseNet
+from src.nn.networks.utils import save_net
 
 
 class Trainer:
 
-    def __init__(self, net, sampler=False) -> None:
+    def __init__(self, net, net_config, sampler=False, device='cpu') -> None:
+
+        self.name = net_config.name
+        self.save_path = net_config.save_path
+        self.model_config = net_config.model_config
 
         self.net: BaseNet = net
         self.train_set = []
         self.val_set = []
         self.sampler = None
         self.class_weights = None
-        self.train_loader = None
-        self.val_loader = None
+        
+        self.device = device
+        self.optim = None
 
     def load_data(self, cfg: DataConfig):
         #TODO refactor data loading
         # + CSV option in data loading
-        self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag, cfg.from_csv)
+        self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag)
         if cfg.filter:
-            self.data = filter_data(self.data, cfg.filter, cfg.from_csv)
+            self.data = filter_data(self.data, cfg.filter)
 
         self.train_set, self.val_set = create_datasets(self.data, cfg)
 
+        print(self.train_set[0])
+
     def add_sampler(self):
         labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
-        self.class_weights = torch.tensor([sum(counts) / c  for c in counts]).to(self.net.device)
+        self.class_weights = torch.tensor([sum(counts) / c  for c in counts]).to(self.device)
         example_weights = [self.class_weights[e] for e in self.train_set.labels ]
         self.sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
 
@@ -57,22 +77,119 @@ class Trainer:
         self.val_set.data = np.load(f"{path}/val_x.npy")
         self.val_set.labels = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
 
-    
     def train(self, epochs: int, batch_size:int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
-        self.train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)
-        self.val_loader = DataLoader(self.val_set, batch_size=batch_size)
-        self.net.train_model(self.train_loader, self.val_loader, epochs, 
-                             reset_optimizer,tensorboard_on, save_interval, print_on, class_weights=self.class_weights)
+        train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)
+        val_loader = DataLoader(self.val_set, batch_size=batch_size)
 
-    def evaulate(self, labels, show=True, save_path=None):
+        self.net.to(self.device)
+        # self.net.double()
+        self.net.train()
+        if self.optim is None or reset_optimizer:
+            self.optim = optim.Adam(self.net.parameters(), lr=0.001)
+
+        criterion = nn.CrossEntropyLoss(weight=self.class_weights) 
+
+        if tensorboard_on:
+            tensorboard = SummaryWriter(log_dir=f"{PACKAGE_PATH}/tensorboard/run")
+
+        for epoch in tqdm.tqdm(range(epochs), desc="Training", position=0):  # loop over the dataset multiple times
+
+            running_loss = 0.0
+            correct = 0
+            total = 0
+
+            for data in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}: ", leave=False, position=1):
+                # get the inputs; data is a list of [inputs, labels]
+                epoch_loss, epoch_correct = self._train_one_epoch(criterion, data)
+
+                # print statistics
+                running_loss += epoch_loss
+                correct += epoch_correct
+                total += data[1].size(0)
+
+            running_loss /= total
+
+            if save_interval is not None and (epoch + 1) % save_interval == 0:
+                save_net(self.net, self.save_path, self.name)
+                self.net.checkpoint += 1
+
+            val_acc, val_loss, _ = self.evaulate_dataset(val_loader)
+
+            if print_on:
+                print(f"Train:\n\tLoss: {running_loss}\n\tAcc: {correct/total*100}", flush=True)
+                print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
+
+            self.net.epoch_trained += 1
+
+            if tensorboard_on:
+                tensorboard.add_scalars(f"{self.name}/accuracy", {'train':correct/total * 100,'val':val_acc}, self.net.epoch_trained)
+                tensorboard.add_scalars(f"{self.name}/loss", {'train':running_loss,'val': val_loss}, self.net.epoch_trained)
+            
+        if tensorboard:
+            tensorboard.close()
+ 
+    def _train_one_epoch(self, criterion, data):
+        inputs, labels = data
+        inputs = inputs.to(self.device)
+        labels = labels.to(self.device)
+                
+        self.optim.zero_grad()
+
+        outputs = self.net(inputs)
+        loss = criterion(outputs.double(), labels.long())
+        loss.backward()
+        self.optim.step()
+
+        _, predicted = torch.max(outputs.data, 1)
+        correct = (predicted == labels).sum().item()
+
+        return loss.item(), correct
+
+    def evaulate_dataset(self, data_loader):
+        total = 0
+        correct = 0
+        total_loss = 0.0
+        criterion = nn.NLLLoss()
+
+        pred_y = np.empty((0,0))
+        true_y = np.empty((0,0))
+
+        with torch.no_grad():   
+            for data in data_loader:
+                inputs, labels = data
+                labels = labels.to(self.device)
+                
+                inputs = inputs.to(self.device)
+                outputs = self.net(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+
+                loss = criterion(outputs.double(), labels.long())
+
+                total_loss += loss.item()
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+                if self.device != "cpu":
+                    predicted = predicted.detach().to('cpu')
+                    labels = labels.detach().to('cpu')
+                pred_y = np.append(pred_y, predicted.numpy())
+                true_y = np.append(true_y, labels.numpy())
+
+        
+            conf_matrix = confusion_matrix(true_y, pred_y)
+
+            return 100 * correct / total, total_loss/total, conf_matrix
+
+    def performance_stats(self, labels, show=True, save_path=None):
         
         
-        self.train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
-        self.val_loader = DataLoader(self.val_set, batch_size=64)
+        train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
+        val_loader = DataLoader(self.val_set, batch_size=64)
 
 
-        train_acc, train_loss, _ = self.net.evaulate(self.train_loader) 
-        val_acc, val_loss, conf_matx = self.net.evaulate(self.val_loader)
+        train_acc, train_loss, _ = self.evaulate_dataset(train_loader) 
+        val_acc, val_loss, conf_matx = self.evaulate_dataset(val_loader)
+        print(type(labels), type(conf_matx))
         confusion_matrix_data = [[labels[i]] + list(conf_matx[i])  for i in range(len(labels))]
         df_confusion_matrix = pd.DataFrame(confusion_matrix_data, columns=["Label"] + labels)
 
@@ -104,7 +221,7 @@ class Trainer:
             
             df_out = df_confusion_matrix.copy()
             df_out = df_out.assign(
-                name=self.net.name,
+                name=self.name,
                 epochs=self.net.epoch_trained,
                 net=str(self.net),
                 train_loss=train_loss,

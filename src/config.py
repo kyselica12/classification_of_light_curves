@@ -1,36 +1,53 @@
 
+from ast import Tuple
 from dataclasses import field, dataclass
 from typing import List
 from dataclasses_json import dataclass_json
+from collections import namedtuple
 import numpy as np
+
 
 
 PACKAGE_PATH = "D:\\work\\classification_of_light_curves"
 
 @dataclass_json
 @dataclass
-class BasicCNNConfig:
-    n_channels: int = 10
-    hid_dim: int = 128
-    stride: int = 1
-    kernel_size: int = 5
+class ModelConfig:
+    input_size: int = 300
+    output_size: int = 5
+
+
+ConvLayer = namedtuple("ConvLayer", ["out_ch", "kernel"])
+@dataclass_json
+@dataclass
+class CNNConfig(ModelConfig):
+    in_channels: int = 1
+    conv_layers: List[ConvLayer] = field(default_factory=list)
+    classifier_layers: List[int] = field(default_factory=list)
 
 @dataclass_json
 @dataclass
-class FCConfig:
-    layers: List[int] = None
+class FCConfig(ModelConfig):
+    layers: List[int] = field(default_factory=list)
+
+@dataclass_json
+@dataclass
+class CNNFCConfig(ModelConfig):
+    in_channels: int = 1
+    cnn_input_size: int = 0
+    cnn_layers: List[Tuple] = field(default_factory=list)
+    fc_output_dim: int = 10
+    fc_layers: List[int] = field(default_factory=list)
+    classifier_layers: List[int] = field(default_factory=list)
+
 
 @dataclass_json
 @dataclass
 class NetConfig:
     name: str = "Real_Augmented_5"
-    input_size: int = 300
-    n_classes: int = 5
-    device: str = "cuda:0"
-    checkpoint: int = None
     save_path: str = f"{PACKAGE_PATH}/resources/models"
     net_class: str = "Net"
-    net_args: dict = field(default_factory=dict)
+    model_config: ModelConfig = None
 
 
 
@@ -60,10 +77,12 @@ class AugmentationConfig:
 @dataclass_json
 @dataclass
 class FourierDatasetConfig:
+    fourier: bool = False
     std: bool = False
     residuals: bool = False
     rms: bool = False
     amplitude: bool = False
+    lc: bool = False
 
 @dataclass_json
 @dataclass
@@ -79,13 +98,14 @@ class DataConfig:
     dataset_arguments: dict = field(default_factory=dict)
     save_path: str = None
     number_of_training_examples_per_class: int = np.inf
-    from_csv: bool = False
     
 @dataclass_json
 @dataclass
 class Config:
     net_config: NetConfig = NetConfig()
+    device: str = "cuda:0"
     data_config: DataConfig = DataConfig()
     seed: int = 0
+
 
     

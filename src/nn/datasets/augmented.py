@@ -30,6 +30,8 @@ class AugmentedBalancedDataset(BasicDataset):
 
         self._shuffle_data()
 
+        self.data = self.data.astype(np.float32)
+
 
     def augment_data(self, leave_original, class_size, roll, add_gaps, add_noise):
         unique_labels = np.unique(self.labels)
