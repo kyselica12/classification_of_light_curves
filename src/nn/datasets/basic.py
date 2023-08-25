@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 
 class BasicDataset(Dataset):
 
-    def __init__(self, data, labels) -> None:
+    def __init__(self, data, labels, mode='val') -> None:
         self.labels = labels
         self.data = self._normalize_data(data)
     
@@ -14,11 +14,11 @@ class BasicDataset(Dataset):
         for i in range(len(data)):
             d = data[i]
             if max_value[i] != 0:
-                d[d==0] = -1
                 diff = max_value[i] - min_value[i]
-                d[d!=-1] = (d[d!=-1] - min_value[i]) / (diff + 0.000000000001)
+                d[d!=0] = (d[d!=0] - min_value[i] + 1e-5) / (diff + 1e-5)
+                # d[d==0] = -1
             res.append(d)
-        return np.array(res).astype(np.float32)
+        return np.array(res).astype(np.double)
         
     def __len__(self):
         return len(self.data)

@@ -16,8 +16,7 @@ class ModelConfig:
     input_size: int = 300
     output_size: int = 5
 
-
-ConvLayer = namedtuple("ConvLayer", ["out_ch", "kernel"])
+ConvLayer = namedtuple("ConvLayer", ["out_ch", "kernel", "stride"], defaults=[1,3,1])
 @dataclass_json
 @dataclass
 class CNNConfig(ModelConfig):
@@ -83,12 +82,14 @@ class FourierDatasetConfig:
     rms: bool = False
     amplitude: bool = False
     lc: bool = False
+    reconstructed_lc: bool = False
+    push_to_max: bool = True
 
 @dataclass_json
 @dataclass
 class DataConfig:
     path: str = ""
-    batch_size = 128
+    batch_size: int = 128
     convert_to_mag: bool = True
     labels: List[str] = None
     regexes: List[str] = None

@@ -44,15 +44,11 @@ class Trainer:
         self.optim = None
 
     def load_data(self, cfg: DataConfig):
-        #TODO refactor data loading
-        # + CSV option in data loading
         self.data = load_data(cfg.path, cfg.labels, cfg.regexes, cfg.convert_to_mag)
         if cfg.filter:
             self.data = filter_data(self.data, cfg.filter)
 
         self.train_set, self.val_set = create_datasets(self.data, cfg)
-
-        print(self.train_set[0])
 
     def add_sampler(self):
         labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
@@ -82,10 +78,11 @@ class Trainer:
         val_loader = DataLoader(self.val_set, batch_size=batch_size)
 
         self.net.to(self.device)
-        # self.net.double()
+        self.net.double()
         self.net.train()
         if self.optim is None or reset_optimizer:
             self.optim = optim.Adam(self.net.parameters(), lr=0.001)
+        
 
         criterion = nn.CrossEntropyLoss(weight=self.class_weights) 
 
@@ -114,7 +111,7 @@ class Trainer:
                 self.net.checkpoint += 1
 
             val_acc, val_loss, _ = self.evaulate_dataset(val_loader)
-
+            
             if print_on:
                 print(f"Train:\n\tLoss: {running_loss}\n\tAcc: {correct/total*100}", flush=True)
                 print(f"Validation:\n\tLoss: {val_loss}\n\tAcc: {val_acc}", flush=True)
@@ -130,17 +127,30 @@ class Trainer:
  
     def _train_one_epoch(self, criterion, data):
         inputs, labels = data
-        inputs = inputs.to(self.device)
+        
+        if torch.any(torch.isnan(inputs)):
+            raise Exception("NaN in inputs")
+        
+        inputs = inputs.to(self.device).double()
         labels = labels.to(self.device)
                 
         self.optim.zero_grad()
 
         outputs = self.net(inputs)
-        loss = criterion(outputs.double(), labels.long())
+        
+        # print(inputs)
+        # print(outputs)
+        # raise Exception("NaN in outputs")
+        
+        if torch.any(torch.isnan(inputs)):
+            raise Exception("NaN in inputs")
+        
+        loss = criterion(outputs, labels.long())
         loss.backward()
         self.optim.step()
-
-        _, predicted = torch.max(outputs.data, 1)
+        
+        predicted = torch.argmax(outputs, dim=1).flatten()
+        # _, predicted = torch.max(outputs.data, 1)
         correct = (predicted == labels).sum().item()
 
         return loss.item(), correct
@@ -149,7 +159,7 @@ class Trainer:
         total = 0
         correct = 0
         total_loss = 0.0
-        criterion = nn.NLLLoss()
+        criterion = nn.CrossEntropyLoss(weight=self.class_weights) 
 
         pred_y = np.empty((0,0))
         true_y = np.empty((0,0))
@@ -159,14 +169,17 @@ class Trainer:
                 inputs, labels = data
                 labels = labels.to(self.device)
                 
-                inputs = inputs.to(self.device)
+                inputs = inputs.to(self.device).double()
                 outputs = self.net(inputs)
-                _, predicted = torch.max(outputs.data, 1)
 
-                loss = criterion(outputs.double(), labels.long())
+                predicted = torch.argmax(outputs, dim=1).flatten()
+                # _, predicted = torch.max(outputs.data, 1)
+
+                loss = criterion(outputs, labels.long())
 
                 total_loss += loss.item()
                 total += labels.size(0)
+
                 correct += (predicted == labels).sum().item()
 
                 if self.device != "cpu":
@@ -189,7 +202,7 @@ class Trainer:
 
         train_acc, train_loss, _ = self.evaulate_dataset(train_loader) 
         val_acc, val_loss, conf_matx = self.evaulate_dataset(val_loader)
-        print(type(labels), type(conf_matx))
+
         confusion_matrix_data = [[labels[i]] + list(conf_matx[i])  for i in range(len(labels))]
         df_confusion_matrix = pd.DataFrame(confusion_matrix_data, columns=["Label"] + labels)
 

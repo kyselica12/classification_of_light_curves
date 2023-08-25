@@ -63,6 +63,5 @@ def save_net(net, name, save_path):
 
 def locate_net_class(name):
     class_path = f"src.nn.networks.{name.lower()}.{name}"
-    print(class_path)
     NetClass = locate(class_path)
     return NetClass

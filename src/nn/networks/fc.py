@@ -13,14 +13,18 @@ class FC(BaseNet):
         layers_config = [cfg.input_size] + cfg.layers + [cfg.output_size]
 
         layers = []
-
+        
         for i in range(1, len(layers_config)):
-            layers.append(nn.Linear(layers_config[i-1], layers_config[i]))
-            layers.append(nn.ReLU())
+            layer = nn.Linear(layers_config[i-1], layers_config[i])
+            gain = nn.init.calculate_gain('relu')
+            layers.append(layer)
+            
+            if i < len(layers_config) - 1:
+                nn.init.xavier_uniform_(layer.weight, gain=gain)
+                layers.append(nn.ReLU())
 
         self.layers = nn.Sequential(*layers)
 
-   
     def forward(self, x):
         x = torch.reshape(x, (-1, self.cfg.input_size))    
         x = self.layers(x)

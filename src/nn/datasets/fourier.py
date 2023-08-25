@@ -8,7 +8,13 @@ from src.nn.datasets.basic import BasicDataset
 
 class FourierDataset(BasicDataset):
 
-    def __init__(self, data, labels, fourier, std, residuals, rms, amplitude, lc) -> None:
+    std = 1
+    mean = 0
+
+    def __init__(self, data, labels, 
+                 fourier, std, residuals, rms, amplitude, 
+                 lc, reconstructed_lc, push_to_max, 
+                 mode='val') -> None:
         
         self.use_fourier_params = fourier
         self.use_std = std
@@ -16,16 +22,38 @@ class FourierDataset(BasicDataset):
         self.use_rms = rms
         self.use_amplitude = amplitude
         self.use_lc = lc
+        self.use_reconstructed_lc = reconstructed_lc
+        self.push_to_max = push_to_max
         
         self.data = []
         for example in tqdm.tqdm(data, desc="Computing Fourier"):
             self.data.append(self._preprocess_example(example))
-        self.data = np.array(self.data).astype(np.float32)
+        self.data = np.array(self.data).astype(np.float64)
 
         self.labels = labels
 
+        if len(data) < 1:
+            return
+        
+        offset = 0
+        if fourier:
+            offset += 16
+        if std:
+            offset += 16
+        if rms:
+            offset += 1
+        if amplitude:
+            offset += 1
+        
+        if offset > 0:
+            if mode == 'train':
+                FourierDataset.std = np.std(self.data[:,:offset], axis=0)
+                FourierDataset.mean = np.mean(self.data[:, :offset], axis=0)
+                            
+            self.data[:,:offset] = (self.data[:, :offset] - FourierDataset.mean) / FourierDataset.std
 
-    
+        # print(np.max(self.data, axis=0), np.min(self.data, axis=0), np.mean(self.data, axis=0))
+
     def _fourier8(self, x, a0, a1, a2, a3, a4, a5, a6, a7, a8, b1, b2, b3, b4, b5, b6, b7, b8):
         pi = np.pi
         y = a0 + a1 * np.cos(x * 2*pi) + b1 * np.sin(x * 2*pi) + \
@@ -39,25 +67,27 @@ class FourierDataset(BasicDataset):
         return y
 
     def _push_to_max(self, example):
+        
+        y = example.copy()
 
-        example[example == 0] = np.inf
+        y[y == 0] = 10_000_000
 
-        minimal_y_value = np.amin(example)
-        index_minimal = np.where(example == minimal_y_value)[0][0]
+        minimal_y_value = np.amin(y)
+        index_minimal = np.where(y == minimal_y_value)[0][0]
         
-        example = np.roll(example, -index_minimal)
+        y = np.roll(y, -index_minimal)
         
-        example[example == np.inf] = 0
+        y[y == 10_000_000] = 0
         
-        return example
+        return y
 
     def _foufit(self, example):
-        example = self._push_to_max(example)
-        phases = np.linspace(0, 1, len(example), endpoint=False)
+        y = self._push_to_max(example)
+        phases = np.linspace(0, 1, len(y), endpoint=False)
 
-        non_zero = example != 0
+        non_zero = y != 0
         xs = phases[non_zero]
-        ys = example[non_zero]
+        ys = y[non_zero]
 
         params, params_covariance = optimize.curve_fit(self._fourier8, xs, ys, absolute_sigma=False, method="lm", maxfev=10000)
         std = np.sqrt(np.diag(params_covariance))
@@ -66,17 +96,23 @@ class FourierDataset(BasicDataset):
         
         amplitude = np.max(y_hat) - np.min(y_hat)
         
-        residuals = np.abs(example - y_hat) / (amplitude + 1e-6)
-        lc_normalized = (example - np.mean(example)) / (amplitude + 1e-6)
+        residuals = np.abs(y - y_hat) / (amplitude + 1e-6)
+
+        lc_normalized = y if self.push_to_max else example
+        lc_normalized[lc_normalized != 0] = lc_normalized[lc_normalized != 0] - np.min(lc_normalized[lc_normalized != 0]) + 1e-5
+        lc_normalized = lc_normalized / (amplitude + 1e-6)
 
         residuals[np.logical_not(non_zero)] = 0
         
         rms = np.sqrt(np.sum(residuals[non_zero]**2) / (residuals[non_zero].size-2))
+        
+        lc_reconstructed = (y_hat - np.min(y_hat) + 1e-5) / (amplitude + 1e-6)
 
-        return params[1:], std[1:], residuals, lc_normalized, rms, amplitude
+        return params[1:], std[1:], residuals, lc_normalized, lc_reconstructed,  rms, amplitude
+
 
     def _preprocess_example(self, example):
-        params, std, residuals, lc_normalized, rms, amplitude = self._foufit(example)
+        params, std, residuals, lc_normalized, lc_reconstructed, rms, amplitude = self._foufit(example)
 
         res = np.empty((0,))
 
@@ -97,6 +133,9 @@ class FourierDataset(BasicDataset):
 
         if  self.use_lc:
             res = np.concatenate((res, lc_normalized))
+            
+        if  self.use_reconstructed_lc:
+            res = np.concatenate((res, lc_reconstructed))
 
         return res
 

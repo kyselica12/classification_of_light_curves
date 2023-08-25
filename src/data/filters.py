@@ -39,7 +39,6 @@ def apply_filters(data, filters_f, operation="AND"):
             if operation == "AND":
                 f_res = np.logical_and(f(data), f_res)
             else:
-                print(":)")
                 f_res = np.logical_or(f(data), f_res)
     
     return data[f_res]
@@ -55,7 +54,6 @@ def apply_sequential_filters(data, filters):
 def get_rms_filter(data_list, rms_ratio=0.5):
     
     ok = np.zeros((data_list.shape[0])).astype(bool)
-    print(data_list.shape)
     
     for i, data in enumerate(data_list):
         indices = data != 0

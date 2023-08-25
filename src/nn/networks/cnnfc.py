@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 
 from src.config import CNNFCConfig, FCConfig, CNNConfig
 from src.nn.networks.cnn import CNN
@@ -20,7 +21,6 @@ class CNNFC(BaseNet):
                 classifier_layers=[]
             )
         )
-
         self.fc = FC(
             FCConfig(
                 input_size=cfg.input_size-cfg.cnn_input_size*cfg.in_channels,
@@ -28,25 +28,30 @@ class CNNFC(BaseNet):
                 layers=cfg.fc_layers
             )
         )
-
+        
+        self.relu = nn.ReLU()
+        
         self.classifier = FC(
             FCConfig(
                 input_size=cfg.fc_output_dim + self.cnn.hid_dim,
                 output_size=cfg.output_size,
-                layers=cfg.classifier_layers
+                layers=cfg.classifier_layers,
             )
         )
 
    
     def forward(self, x):
 
-        fc_in = x[:, :-self.cfg.cnn_input_size]
-        cnn_in = x[:, -self.cfg.cnn_input_size:].reshape(-1, self.cfg.in_channels, self.cfg.cnn_input_size)
+        cnn_input = self.cfg.cnn_input_size * self.cfg.in_channels
+        fc_in = x[:, :-cnn_input]
+        cnn_in = x[:, -cnn_input:].reshape(-1, self.cfg.in_channels, self.cfg.cnn_input_size)
         
         fc_out = self.fc(fc_in)
         cnn_out = self.cnn.layers(cnn_in)
 
         x = torch.cat((fc_out, cnn_out), dim=1)
+        
+        x = self.relu(x)
         
         x = self.classifier(x)
         

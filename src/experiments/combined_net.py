@@ -8,9 +8,9 @@ from src.experiments.utils import run
 import tqdm
 
 FOLDER_NAME = "Experiments"#"Fourier_FC_8_8_v1"
-EXPERIMENT_NAME = "CNN_LC_datasets"
+EXPERIMENT_NAME = "CNNFC_Residuals"
 
-EPOCHS = 300
+EPOCHS = 500
 SAVE_INTERVAL = 50
 BATCH_SIZE = 128
 SAMPLER = True
@@ -22,19 +22,25 @@ CHECKPOINT = "latest"
 
 dataset_name = "FourierDataset"
 dataset_args = FourierDatasetConfig(
-    lc=True
+    fourier=True,
+    residuals=True,
+    amplitude=True
 ).__dict__
 
 
 
-net_class="CNN"
-model_config=CNNConfig(
-            input_size=300,
-            output_size=5,
-            in_channels=1,
-            conv_layers=[(5, 11,5), (20, 3,1)],
-            classifier_layers=[128]
-)  
+net_class="CNNFC"
+model_config=CNNFCConfig(
+    input_size=16+1+300,
+    output_size=5,
+    in_channels=1,
+    cnn_input_size=300,
+    cnn_layers=[(5, 11,5), (20, 3,1)],
+    fc_output_dim=256,
+    fc_layers=[128,128],
+    classifier_layers=[256]
+)
+
 
 
 net_config = NetConfig(
@@ -66,22 +72,28 @@ cfg = Config(net_config=net_config, data_config=data_config)
 
 OPTIONS = [
     (FourierDatasetConfig(
-        lc=True,
-        push_to_max=True
-    ).__dict__, "Pushed LC"),
+    fourier=True,
+    residuals=True,
+    amplitude=True
+    ).__dict__
+    , "Residuals"),
     (FourierDatasetConfig(
-        lc=True,
-        push_to_max=False
-    ).__dict__, "Unpushed LC"),
+    fourier=True,
+    amplitude=True,
+    lc=True
+    ).__dict__
+    , "LC"),
     (FourierDatasetConfig(
-        reconstructed_lc=True,
-    ).__dict__, "Reconstructed LC"),
+    fourier=True,
+    amplitude=True,
+    reconstructed_lc=True
+    ).__dict__
+    , "Reconstructed LC"),
 ]
 
 for op, name in tqdm.tqdm(OPTIONS):
-    # cfg.net_config.model_config.classifier_layers = classifier_layers
-    cfg.net_config.name = f"{EXPERIMENT_NAME}_{name}"
     cfg.data_config.dataset_arguments = op
+    cfg.net_config.name = f"{EXPERIMENT_NAME}_{name}"
 
     run(FOLDER_NAME,
         cfg,

@@ -9,8 +9,8 @@ def create_datasets(labeled_data, cfg:DataConfig):
     (X_train, Y_train), (X_test, Y_test) = split_data_to_test_validation(labeled_data, cfg.labels, cfg.number_of_training_examples_per_class, cfg.validation_split)
 
     DatasetClass = find_dataset_class(cfg.dataset_class)
-    val_set = DatasetClass(X_test, Y_test, **cfg.dataset_arguments)
-    train_set = DatasetClass(X_train, Y_train, **cfg.dataset_arguments)
+    train_set = DatasetClass(X_train, Y_train, **cfg.dataset_arguments, mode='train')
+    val_set = DatasetClass(X_test, Y_test, **cfg.dataset_arguments, mode='val')
 
     print(f"Training set: {len(train_set)}")
     print(f"Validation set: {len(val_set)}")

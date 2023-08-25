@@ -1,8 +1,44 @@
 import os
 
-from src.config import Config, PACKAGE_PATH
+import tqdm
+
+from src.config import Config, PACKAGE_PATH, DataConfig, FCConfig, FilterConfig, NetConfig
 from src.train import Trainer
 from src.nn.networks.utils import get_new_net, load_net
+from src.experiments.constants import *
+
+def get_default_cfg():
+    data_config = DataConfig(
+            path=f"{PACKAGE_PATH}/resources/Fall_2021_R_B_globalstar.csv",
+            labels=["cz_3", "falcon_9", "atlas",  "h2a", "globalstar"],
+            regexes=[r'CZ-3B.*', r'FALCON_9.*', r'ATLAS_[5|V]_CENTAUR_R\|B$',  r'H-2A.*', r'GLOBALSTAR.*'],
+            convert_to_mag=False,
+            batch_size=BATCH_SIZE,
+            number_of_training_examples_per_class = MAX_EXAMPLES,
+            validation_split = 0.1,
+            dataset_class="FourierDataset",
+            dataset_arguments={},
+            filter=FilterConfig(
+                n_bins= 30,
+                n_gaps= 10,
+                gap_size= 5, 
+                rms_ratio= 0.,
+                non_zero_ratio=0.8
+            )
+    )
+
+    net_cfg = NetConfig(
+            name="Default",
+            save_path=f"{PACKAGE_PATH}/output/models/{FOLDER_NAME}/",
+            net_class="FC",  
+            model_config=FCConfig(input_size=16, output_size=5, layers=[])  
+    )
+
+    cfg = Config(net_config=net_cfg, data_config=data_config)
+
+    return cfg
+
+    
 
 def create_ouput_folders(folder_name):
     for f in ["models", "datasets","configurations"]:
@@ -11,7 +47,9 @@ def create_ouput_folders(folder_name):
 def load_dataset_to_trainer(trainer: Trainer, folder_name, cfg: Config):
     dataset_path = f"{PACKAGE_PATH}/output/datasets/{folder_name}"
 
-    dataset_name = f"{cfg.data_config.filter.n_bins}_{cfg.data_config.filter.n_gaps}_{cfg.data_config.filter.gap_size}_{int(cfg.data_config.filter.non_zero_ratio * 10)}_{cfg.data_config.number_of_training_examples_per_class}"
+    dataset_name = cfg.data_config.dataset_class + "_".join([f"{k}_{v}" for k,v in cfg.data_config.dataset_arguments.items()])
+    dataset_name += f"_{MAX_EXAMPLES}"
+
 
     if os.path.exists(f"{dataset_path}/{dataset_name}"):
         trainer.load_data_from_file(f"{dataset_path}/{dataset_name}", cfg.data_config)
@@ -43,4 +81,24 @@ def run(folder_name,
     for i in range(0,epochs, epoch_save_interval):
         trainer.train(epoch_save_interval, batch_size, tensorboard_on=True, save_interval=None, print_on=False)
         trainer.performance_stats(cfg.data_config.labels, save_path=output_csv_path)
+
+
+def run_experiment(options, action, name):
     
+    cfg = get_default_cfg()
+    
+    for op in tqdm.tqdm(options):
+        print("Options: ", op)
+        action(op, cfg)
+
+        run(FOLDER_NAME,
+            cfg,
+            epochs=EPOCHS,
+            epoch_save_interval=SAVE_INTERVAL,
+            batch_size=cfg.data_config.batch_size,
+            sampler=SAMPLER,
+            output_csv_path=f"{PACKAGE_PATH}/output/{name}_results.csv",
+            load=LOAD,
+            seed=SEED,
+            checkpoint=CHECKPOINT
+        )
