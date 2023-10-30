@@ -59,7 +59,7 @@ def load_net(cfg: NetConfig, seed, checkpoint="latest"):
     return net
 
 def save_net(net, name, save_path):
-    torch.save(net.state_dict(), f'{save_path}\\{name}_epochs_{net.epoch_trained:d}_checkpoint_{net.checkpoint:03d}.model')
+    torch.save(net.state_dict(), f'{save_path}/{name}_epochs_{net.epoch_trained:d}_checkpoint_{net.checkpoint:03d}.model')
 
 def locate_net_class(name):
     class_path = f"src.nn.networks.{name.lower()}.{name}"

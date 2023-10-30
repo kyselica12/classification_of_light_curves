@@ -74,8 +74,8 @@ class Trainer:
         self.val_set.labels = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
 
     def train(self, epochs: int, batch_size:int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
-        train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)
-        val_loader = DataLoader(self.val_set, batch_size=batch_size)
+        train_loader = DataLoader(self.train_set,batch_size=batch_size, shuffle=self.sampler is None, sampler=self.sampler)
+        val_loader = DataLoader(self.val_set, batch_size=batch_size, shuffle=False)
 
         self.net.to(self.device)
         self.net.double()
@@ -89,6 +89,8 @@ class Trainer:
         if tensorboard_on:
             tensorboard = SummaryWriter(log_dir=f"{PACKAGE_PATH}/tensorboard/run")
 
+        val_losses = []
+        train_losses = []
         for epoch in tqdm.tqdm(range(epochs), desc="Training", position=0):  # loop over the dataset multiple times
 
             running_loss = 0.0
@@ -111,6 +113,8 @@ class Trainer:
                 self.net.checkpoint += 1
 
             val_acc, val_loss, _ = self.evaulate_dataset(val_loader)
+            val_losses.append(val_loss)
+            train_losses.append(running_loss)
             
             if print_on:
                 print(f"Train:\n\tLoss: {running_loss}\n\tAcc: {correct/total*100}", flush=True)
@@ -122,8 +126,10 @@ class Trainer:
                 tensorboard.add_scalars(f"{self.name}/accuracy", {'train':correct/total * 100,'val':val_acc}, self.net.epoch_trained)
                 tensorboard.add_scalars(f"{self.name}/loss", {'train':running_loss,'val': val_loss}, self.net.epoch_trained)
             
-        if tensorboard:
+        if tensorboard_on:
             tensorboard.close()
+        
+        return train_losses, val_losses
  
     def _train_one_epoch(self, criterion, data):
         inputs, labels = data
@@ -196,8 +202,8 @@ class Trainer:
     def performance_stats(self, labels, show=True, save_path=None):
         
         
-        train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
-        val_loader = DataLoader(self.val_set, batch_size=64)
+        train_loader = DataLoader(self.train_set,batch_size=64, shuffle=False)
+        val_loader = DataLoader(self.val_set, batch_size=64, shuffle=False)
 
 
         train_acc, train_loss, _ = self.evaulate_dataset(train_loader) 

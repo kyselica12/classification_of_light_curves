@@ -8,7 +8,7 @@ import numpy as np
 
 
 
-PACKAGE_PATH = "D:\\work\\classification_of_light_curves"
+PACKAGE_PATH = "/home/daniel/Documents/work/classification_of_light_curves"
 
 @dataclass_json
 @dataclass
@@ -103,9 +103,9 @@ class DataConfig:
 @dataclass_json
 @dataclass
 class Config:
-    net_config: NetConfig = NetConfig()
+    net_config: NetConfig = field(default_factory=lambda: NetConfig())
     device: str = "cuda:0"
-    data_config: DataConfig = DataConfig()
+    data_config: DataConfig = field(default_factory=lambda: DataConfig())
     seed: int = 0
 
 

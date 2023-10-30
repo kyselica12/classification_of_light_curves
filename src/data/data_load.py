@@ -79,11 +79,3 @@ def get_stats(arr):
     stats = np.sum(arr != 0, axis=1) / 300 * 100
     return stats
     
-def load_data_from_numpy_arrays(path):
-    data = {}
-    for filepath in glob.iglob(f"{path}/*.npy"):
-        label = os.path.split(filepath)[1][:-len(".npy")]
-        data[label] = np.load(filepath)
-
-    return data  
-    
