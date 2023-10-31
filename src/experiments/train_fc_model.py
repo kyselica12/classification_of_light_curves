@@ -1,5 +1,6 @@
 import sys
 
+
 sys.path.append("./")
 
 from src.config import  PACKAGE_PATH, FourierDatasetConfig, FCConfig
@@ -8,6 +9,7 @@ from src.experiments.constants import *
 from src.experiments.utils import get_default_cfg, load_dataset_to_trainer
 from src.train import Trainer
 from src.nn.networks.utils import get_new_net, load_net, save_net
+from src.nn.datasets.fourier import FourierDataset
 
 
 cfg = get_default_cfg()
@@ -27,7 +29,13 @@ cfg.net_config.model_config = FCConfig(
 
 trainer = Trainer(None, cfg.net_config, cfg.device)
 
-load_dataset_to_trainer(trainer, f"Experiments", cfg)
+load_dataset_to_trainer(trainer, f"Experiments_Fourier", cfg)
+trainer.train_set.offset = 16
+trainer.val_set.offset = 16
+trainer.train_set.compute_std_mean()
+
+print(FourierDataset.std, FourierDataset.mean)
+mean, std = FourierDataset.mean, FourierDataset.std
 
 trainer.net = get_new_net(cfg, f"{PACKAGE_PATH}/output/configurations/{cfg.net_config.name}.json")
 trainer.add_sampler()
@@ -37,7 +45,7 @@ save_interval = 10
 
 for i in range(0,epochs, save_interval):
     trainer.train(save_interval, 64, tensorboard_on=False, save_interval=None, print_on=False)
-    save_net(trainer.net, cfg.net_config.name, model_path)
-    trainer.performance_stats(cfg.data_config.labels, save_path=f"{PACKAGE_PATH}/output/Fourier_trained.csv")
+    save_net(trainer.net, "FC", model_path)
+    trainer.performance_stats(cfg.data_config.labels)
 
 

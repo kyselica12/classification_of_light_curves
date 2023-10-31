@@ -52,7 +52,11 @@ class Trainer:
 
     def add_sampler(self):
         labels_unique, counts = np.unique(self.train_set.labels, return_counts=True)
-        self.class_weights = torch.tensor([sum(counts) / c  for c in counts]).to(self.device)
+        weights = [sum(counts) / c  for c in counts]
+        if len(weights) < 5:
+            weights.append(1)
+        self.class_weights = torch.tensor(weights).to(self.device)
+        print(self.class_weights)
         example_weights = [self.class_weights[e] for e in self.train_set.labels ]
         self.sampler = WeightedRandomSampler(example_weights, len(self.train_set.labels))
 
@@ -161,7 +165,7 @@ class Trainer:
 
         return loss.item(), correct
 
-    def evaulate_dataset(self, data_loader):
+    def evaulate_dataset(self, data_loader, n_labels=None):
         total = 0
         correct = 0
         total_loss = 0.0
@@ -195,7 +199,8 @@ class Trainer:
                 true_y = np.append(true_y, labels.numpy())
 
         
-            conf_matrix = confusion_matrix(true_y, pred_y)
+            labels = None if n_labels is None else list(range(n_labels))
+            conf_matrix = confusion_matrix(true_y, pred_y, labels=labels)
 
             return 100 * correct / total, total_loss/total, conf_matrix
 
@@ -206,8 +211,8 @@ class Trainer:
         val_loader = DataLoader(self.val_set, batch_size=64, shuffle=False)
 
 
-        train_acc, train_loss, _ = self.evaulate_dataset(train_loader) 
-        val_acc, val_loss, conf_matx = self.evaulate_dataset(val_loader)
+        train_acc, train_loss, _ = self.evaulate_dataset(train_loader, len(labels)) 
+        val_acc, val_loss, conf_matx = self.evaulate_dataset(val_loader, len(labels))
 
         confusion_matrix_data = [[labels[i]] + list(conf_matx[i])  for i in range(len(labels))]
         df_confusion_matrix = pd.DataFrame(confusion_matrix_data, columns=["Label"] + labels)
