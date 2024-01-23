@@ -74,8 +74,8 @@ class Trainer:
         self.val_set.labels = np.load(f"{path}/val_y.npy").astype(dtype=np.int32)
 
     def train(self, epochs: int, batch_size:int, reset_optimizer=False, tensorboard_on=False, print_on=False, save_interval=None) -> None:
-        train_loader = DataLoader(self.train_set,batch_size=batch_size, sampler=self.sampler)
-        val_loader = DataLoader(self.val_set, batch_size=batch_size)
+        train_loader = DataLoader(self.train_set,batch_size=batch_size, shuffle=True, sampler=self.sampler)
+        val_loader = DataLoader(self.val_set, batch_size=batch_size, shuffle=True)
 
         self.net.to(self.device)
         self.net.double()
@@ -196,8 +196,8 @@ class Trainer:
     def performance_stats(self, labels, show=True, save_path=None):
         
         
-        train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler)
-        val_loader = DataLoader(self.val_set, batch_size=64)
+        train_loader = DataLoader(self.train_set,batch_size=64, sampler=self.sampler, shuffle=True)
+        val_loader = DataLoader(self.val_set, batch_size=64, shuffle=True)
 
 
         train_acc, train_loss, _ = self.evaulate_dataset(train_loader) 
