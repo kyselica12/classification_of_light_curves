@@ -34,23 +34,26 @@ def get_checkpoint_and_epoch_number(path):
     seed = int(path.split("_")[-5])
     return checkpoint, epoch, seed
 
-def load_net(cfg: NetConfig, seed, checkpoint="latest"):
+def load_net(cfg: Config, seed, epoch='*', checkpoint="latest"):
     np.random.seed(seed)
     torch.manual_seed(seed)
     random.seed(seed)
     cfg.seed = seed
+    net_config = cfg.net_config
     
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    cfg.net_config.name = f"{cfg.net_config.name}_{seed}"
+    net_config.name = f"{net_config.name}_{seed}"
     # net = ResNet(net_cfg.n_classes, device=device, name=net_cfg.name)
-    NetClass = locate_net_class(cfg.net_config.net_class)
-    net = NetClass(cfg.net_config.model_config)
+    NetClass = locate_net_class(net_config.net_class)
+    net = NetClass(net_config.model_config)
 
     if checkpoint == 'latest':
-        models = list(glob.iglob(f"{cfg.save_path}\\{cfg.name}_epochs_*_checkpoint_*.model"))
+        ckpt_path = f"{net_config.save_path}/{net_config.name}_epochs_{epoch}_checkpoint_*.model"
+        models = list(glob.iglob(ckpt_path))
         model_path = max(models, key=get_checkpoint_and_epoch_number)
     else:
-        models = list(glob.iglob(f"{cfg.save_path}\\{cfg.name}_epochs_*_checkpoint_{checkpoint:03d}.model"))
+        ckpt_path = f"{net_config.save_path}/{net_config.name}_epochs_{epoch}_checkpoint_{checkpoint:03d}.model"
+        models = list(glob.iglob(ckpt_path))
         model_path = max(models, key=get_checkpoint_and_epoch_number)
 
     net.load_state_dict(torch.load(model_path))
@@ -59,7 +62,8 @@ def load_net(cfg: NetConfig, seed, checkpoint="latest"):
     return net
 
 def save_net(net, name, save_path):
-    torch.save(net.state_dict(), f'{save_path}\\{name}_epochs_{net.epoch_trained:d}_checkpoint_{net.checkpoint:03d}.model')
+    print(f"{name}_epochs_{net.epoch_trained:d}_checkpoint_{net.checkpoint:03d}.model")
+    torch.save(net.state_dict(), f'{save_path}/{name}_epochs_{net.epoch_trained:d}_checkpoint_{net.checkpoint:03d}.model')
 
 def locate_net_class(name):
     class_path = f"src.nn.networks.{name.lower()}.{name}"

@@ -31,6 +31,7 @@ class FourierDataset(BasicDataset):
         self.data = np.array(self.data).astype(np.float64)
 
         self.labels = labels
+        self.offset = 0
 
         if len(data) < 1:
             return
@@ -44,15 +45,31 @@ class FourierDataset(BasicDataset):
             offset += 1
         if amplitude:
             offset += 1
+
+        self.offset = offset
         
         if offset > 0:
             if mode == 'train':
-                FourierDataset.std = np.std(self.data[:,:offset], axis=0)
-                FourierDataset.mean = np.mean(self.data[:, :offset], axis=0)
+                self.compute_std_mean()
                             
-            self.data[:,:offset] = (self.data[:, :offset] - FourierDataset.mean) / FourierDataset.std
+            # self.data[:,:offset] = (self.data[:, :offset] - FourierDataset.mean) / FourierDataset.std
 
         # print(np.max(self.data, axis=0), np.min(self.data, axis=0), np.mean(self.data, axis=0))
+    def normalize(self, example):
+        if self.offset > 0:
+            return (example[:self.offset] - FourierDataset.mean) / FourierDataset.std
+
+    def compute_std_mean(self):
+        FourierDataset.std = np.std(self.data[:,:self.offset], axis=0)
+        FourierDataset.mean = np.mean(self.data[:, :self.offset], axis=0)
+
+    def __getitem__(self, index):
+        arr = self.data[index]
+        label = self.labels[index]
+
+        arr = self.normalize(arr)
+
+        return arr, label
 
     def _fourier8(self, x, a0, a1, a2, a3, a4, a5, a6, a7, a8, b1, b2, b3, b4, b5, b6, b7, b8):
         pi = np.pi

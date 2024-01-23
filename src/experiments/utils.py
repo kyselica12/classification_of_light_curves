@@ -1,10 +1,12 @@
 import os
 
 import tqdm
+import numpy as np
 
 from src.config import Config, PACKAGE_PATH, DataConfig, FCConfig, FilterConfig, NetConfig
 from src.train import Trainer
 from src.nn.networks.utils import get_new_net, load_net
+from src.nn.datasets.fourier import FourierDataset
 from src.experiments.constants import *
 
 def get_default_cfg():
@@ -66,7 +68,7 @@ def run(folder_name,
 
     create_ouput_folders(folder_name)
     
-    trainer = Trainer(None, cfg.net_config, cfg.device)
+    trainer = Trainer(None, cfg.net_config, device=cfg.device)
 
     load_dataset_to_trainer(trainer, folder_name, cfg)
 
@@ -78,9 +80,26 @@ def run(folder_name,
     if  sampler:
         trainer.add_sampler()
 
-    for i in range(0,epochs, epoch_save_interval):
+    for _ in range(0,epochs, epoch_save_interval):
         trainer.train(epoch_save_interval, batch_size, tensorboard_on=True, save_interval=None, print_on=False)
         trainer.performance_stats(cfg.data_config.labels, save_path=output_csv_path)
+
+def test_SDLCD(path, cfg, seed, epoch,checkpoint, train_dataset_folder, output_path='.'):
+
+    trainer = Trainer(None, cfg.net_config, device=cfg.device)
+    load_dataset_to_trainer(trainer, train_dataset_folder, cfg)
+    trainer.net = load_net(cfg, seed=seed, epoch=epoch, checkpoint=checkpoint)
+    trainer.net.to(cfg.device)
+    trainer.net.double()
+
+    test_set = FourierDataset([],[],**cfg.data_config.dataset_arguments)
+    test_set.data = np.load(f"{path}/test_x.npy")
+    test_set.labels = np.load(f"{path}/test_y.npy").astype(dtype=np.int32)
+
+    trainer.val_set = test_set
+
+    trainer.performance_stats(cfg.data_config.labels, save_path=f'{output_path}/SDLCD_test.csv')
+    
 
 
 def run_experiment(options, action, name):
