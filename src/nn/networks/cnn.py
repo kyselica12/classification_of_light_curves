@@ -42,12 +42,7 @@ class CNN(BaseNet):
             )
         )
 
-    def forward(self, x): 
-        # print("Input", x)
+    def forward(self, x, features=False): 
         x = torch.reshape(x, (-1, self.cfg.in_channels, self.cfg.input_size))
         x = self.layers(x)
-        # print(x)
-        x = self.classifier(x)
-        # print(x)
-
-        return x
+        return self.classifier.forward(x, features)

@@ -40,7 +40,7 @@ class CNNFC(BaseNet):
         )
 
    
-    def forward(self, x):
+    def forward(self, x, features=False):
 
         cnn_input = self.cfg.cnn_input_size * self.cfg.in_channels
         fc_in = x[:, :-cnn_input]
@@ -53,7 +53,5 @@ class CNNFC(BaseNet):
         
         x = self.relu(x)
         
-        x = self.classifier(x)
-        
-        return x
+        return self.classifier.forward(x, features)
 

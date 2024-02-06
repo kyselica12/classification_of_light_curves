@@ -1,0 +1,14 @@
+numpy
+matplotlib
+pandas
+scipy
+torch
+torchvision
+tqdm
+glob2
+scikit-learn
+argparse
+dataclasses-json
+tensorboard
+wandb
+pytorch-lightning

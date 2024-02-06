@@ -8,7 +8,8 @@ import numpy as np
 
 
 
-PACKAGE_PATH = "D:/work/classification_of_light_curves"
+# PACKAGE_PATH = "D:/work/classification_of_light_curves"
+PACKAGE_PATH = "/media/bach/DATA/work/classification_of_light_curves"
 
 @dataclass_json
 @dataclass

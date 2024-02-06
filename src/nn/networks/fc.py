@@ -23,9 +23,15 @@ class FC(BaseNet):
                 nn.init.xavier_uniform_(layer.weight, gain=gain)
                 layers.append(nn.ReLU())
 
-        self.layers = nn.Sequential(*layers)
+        self.layers = nn.ModuleList(layers)
 
-    def forward(self, x):
+    def forward(self, x, features=False):
         x = torch.reshape(x, (-1, self.cfg.input_size))    
-        x = self.layers(x)
-        return x
+        for layer in self.layers[:-1]:
+            x = layer(x)
+        out = self.layers[-1](x)
+
+        if features:
+            return x, out
+
+        return out
