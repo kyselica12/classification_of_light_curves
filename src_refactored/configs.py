@@ -1,12 +1,12 @@
 import numpy as np
 from dataclasses import dataclass, field
-from enum import StrEnum
+from strenum import StrEnum
+# from enum import StrEnum
 from typing import List
 
 
 PACKAGE_PATH = "/media/bach/DATA/work/classification_of_light_curves"
 
-@dataclass
 class NetArchitecture(StrEnum):
     FC = "FullyConnected"
     CNN = "CNN"
@@ -36,6 +36,7 @@ class DataConfig:
     regexes: List[str] = field(default_factory=list)
     validation_split: float = 0.2
     number_of_training_examples_per_class: int = np.inf
-    filter_config: FilterConfig = FilterConfig()
+    filter_config: FilterConfig = field(default_factory=lambda: FilterConfig())
+    convert_to_mag: bool = False
     args: dict = field(default_factory=dict)
 
