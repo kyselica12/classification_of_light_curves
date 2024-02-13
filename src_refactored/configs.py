@@ -1,11 +1,13 @@
 import numpy as np
 from dataclasses import dataclass, field
 from strenum import StrEnum
-# from enum import StrEnum
 from typing import List
 
 
 PACKAGE_PATH = "/media/bach/DATA/work/classification_of_light_curves"
+WANDB_KEY_FILE = "wandb.key"
+LC_SIZE = 300
+FOURIER_N = 8
 
 class NetArchitecture(StrEnum):
     FC = "FullyConnected"
@@ -35,8 +37,17 @@ class DataConfig:
     labels: List[str] = field(default_factory=list)
     regexes: List[str] = field(default_factory=list)
     validation_split: float = 0.2
-    number_of_training_examples_per_class: int = np.inf
+    number_of_training_examples_per_class: int = 10_000
     filter_config: FilterConfig = field(default_factory=lambda: FilterConfig())
     convert_to_mag: bool = False
+    max_amplitude: float = 20
     args: dict = field(default_factory=dict)
-
+    fourier: bool = False
+    std: bool = False
+    rms: bool = False
+    residuals: bool = False
+    amplitude: bool = False
+    lc: bool = False
+    reconstructed_lc: bool = False
+    push_to_max: bool = False
+ 

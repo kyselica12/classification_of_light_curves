@@ -12,3 +12,4 @@ dataclasses-json
 tensorboard
 wandb
 pytorch-lightning
+StrEnum
