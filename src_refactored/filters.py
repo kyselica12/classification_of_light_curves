@@ -84,11 +84,6 @@ def filter_data(data, cfg: FilterConfig):
 
     filtered_data = {}
     for label in data:
-        tmp = []
-        for d in data[label]:
-            r = app_filters_p(d)
-            if len(r) > 0:
-                tmp.append(r)
-        filtered_data[label] = tmp
+        filtered_data[label] = app_filters_p(data[label])
     
     return filtered_data

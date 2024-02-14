@@ -4,7 +4,7 @@ from strenum import StrEnum
 from typing import List
 
 
-PACKAGE_PATH = "/media/bach/DATA/work/classification_of_light_curves"
+PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
 WANDB_KEY_FILE = "wandb.key"
 LC_SIZE = 300
 FOURIER_N = 8
@@ -34,7 +34,7 @@ class FilterConfig:
 class DataConfig:
     path: str = ""
     output_path: str = None
-    labels: List[str] = field(default_factory=list)
+    class_names: List[str] = field(default_factory=list)
     regexes: List[str] = field(default_factory=list)
     validation_split: float = 0.2
     number_of_training_examples_per_class: int = 10_000

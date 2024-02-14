@@ -18,7 +18,7 @@ class DataProcessor:
     
     def __init__(self, data_config: DataConfig):
         self.data_config = data_config
-        self.labels = data_config.labels
+        self.class_names = data_config.class_names
         self.regexes = data_config.regexes
         self.path = data_config.path
         self.output_path = data_config.output_path
@@ -39,27 +39,28 @@ class DataProcessor:
 
         self.examples = None
         self.labels = None
+        self.headers = None
 
     def _generate_hash(self):
-        hash_text = f'{self.labels}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
+        hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
         return hashlib.md5(hash_text.encode()).hexdigest()
 
     def save_data_MMT(self):
         hash = self._generate_hash()
-        os.makedirs(f'{self.output_path}/{hash}', exist_ok=True)
+        path = f'{self.output_path}/{hash}'
+        os.makedirs(path, exist_ok=True)
 
-        np.savetxt("examples.txt", self.examples)
-        np.savetxt("labels.txt", self.labels)
+        np.savetxt(f"{path}/examples.txt", self.examples)
+        np.savetxt(f"{path}/labels.txt", self.labels)
+        np.savetxt(f"{path}/headers.txt", self.headers)
 
     def load_data_MMT(self):
         hash = self._generate_hash()
         path = f'{self.output_path}/{hash}'
 
-        examples = np.loadtxt(f'{path}/examples.txt')
-        labels = np.loadtxt(f'{path}/labels.txt')
-
-        self.examples = examples
-        self.labels = labels
+        self.examples = np.loadtxt(f'{path}/examples.txt')
+        self.labels = np.loadtxt(f'{path}/labels.txt')
+        self.headers = np.loadtxt(f'{path}/labels.txt')
 
     def load_raw_data_MMT(self):
         data_dict, header_dict, columns = self._read_csv_files()
@@ -76,43 +77,50 @@ class DataProcessor:
         fourier_coefs = []
         for label, data in data_dict.items():
             for d in tqdm.tqdm(data, desc=f"Fourier for class {label}"):
-                fourier_coefs.append(self._foufit(d))
+                fourier_coefs.append(np.concatenate(self._foufit(d)))
 
-        self.labels = np.array([idx for idx,l in enumerate(data_dict) for i in range(len(data_dict[l]))])
-        examples = np.array([d for ds in data_dict.values() for d in ds])
-        self.examples = np.concatenate((examples, np.array(fourier_coefs)), axis=1)
+        self.labels = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
+        self.examples = np.concatenate(list(data_dict.values()))
+        self.headers = np.concatenate(list(header_dict.values()))
+        
+        self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
 
     def prepare_dataset(self, examples, labels, seed=None):
 
         N = len(examples)
         data = []
         lc = examples[:,:LC_SIZE]
-        fc_rms = examples[:,LC_SIZE:]
-        fc = fc_rms[:,:2*FOURIER_N+1]
-        rms = fc_rms[:,2*FOURIER_N+1:]
+        fc_std = examples[:,LC_SIZE:]
+        fc = fc_std[:,:2*FOURIER_N+1]
+        std = fc_std[:,2*FOURIER_N+1:]
+
+        print(list(fc[0]))
 
         phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
-        print(fc.shape, rms.shape, lc.shape)
+        print(fc.shape, std.shape, lc.shape)
         y_hat = np.array([self._fourier8(phases, *(list(fc[i]))) for i in range(N)])
+        print(y_hat.shape)
         
-        amplitude = np.max(y_hat, axis=1) - np.min(y_hat, axis=1)
+        amplitude = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
         residuals = np.abs(lc - y_hat) / (amplitude + 1e-6)
-        non_zero = lc != 0
         
         if self.use_lc:
-            data.append(lc[non_zero] - np.min(lc[non_zero], axis=1) + 1e-6 / (amplitude + 1e-6))
+            lc[lc == 0] = np.nan
+            lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
+            lc[np.isnan(lc)] = 0
+            data.append(lc)
         if self.use_reconstructed:
-            recontructed_lc = (y_hat - np.min(y_hat,axis=1) + 1e-6) / (amplitude + 1e-6)
+            recontructed_lc = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
             data.append(recontructed_lc)
         if self.use_residuals:
             data.append(residuals)
         if self.use_fourier:
             data.append(fc[:,1:])
         if self.use_std:
-            data.append(rms[:,1:])
+            data.append(std[:,1:])
         if self.use_rms:
-            rms = np.sqrt(np.sum(residuals[non_zero]**2) / (residuals[non_zero].size-2))
-            data.append(rms)
+            rms = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6))
+            data.append(rms.reshape(-1,1))
         if self.use_amplitude:
             data.append(amplitude / self.max_amplitude)
 
@@ -124,6 +132,7 @@ class DataProcessor:
         return (train_X, train_y), (val_X, val_y)
 
     def split_dataset(self, X,y, split=0.1, seed=None):
+        #TODO: split by objects -> use header_dict
         if seed:
             random.seed(seed)
         
@@ -146,22 +155,27 @@ class DataProcessor:
                 arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
         
     def _read_csv_files(self):
-        data_dict = defaultdict(list)
-        header_dict = defaultdict(list)
+        data_dict = {c: [] for c in self.class_names}
+        header_dict = {c: [] for c in self.class_names}
+
         columns = None
         for file in tqdm.tqdm(glob.glob(f"{self.path}/*.csv")):
-            name = os.path.split(file)[-1]
-            if label := self.get_object_label(name, self.labels, self.regexes):
+            name = os.path.split(file)[-1][:-len(".csv")]
+            if label := self.get_object_label(name, self.class_names, self.regexes):
                 df = pd.read_csv(file)
                 arr = df.to_numpy()
-                header = arr[:,:4]
-                lc = arr[:,:4]
+                header = arr[:,:3] #FIXME: check if only first 3 columns are header
+                lc = arr[:,3:]
 
                 data_dict[label].append(lc)
                 header_dict[label].append(header)
 
                 if columns is None:
                     columns = list(df.columns)
+        for l in self.class_names:
+            data_dict[l] = np.concatenate(data_dict[l])
+            header_dict[l] = np.concatenate(header_dict[l])
+
         return data_dict, header_dict, columns
 
     def _push_to_max(self, example):
@@ -220,7 +234,7 @@ class DataProcessor:
     
     def get_pytorch_datasets(self):
 
-        if  self.examples is None or self.labels is None:
+        if  self.examples is None or self.class_names is None:
             raise Exception("No Data loaded yet. Please load data first.")
         
         (train_X, train_y), (val_X, val_y) = self.prepare_dataset(self.examples, self.labels)
