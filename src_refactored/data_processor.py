@@ -39,6 +39,7 @@ class DataProcessor:
 
         self.examples = None
         self.labels = None
+        # ObjectID, TrackID, Phase
         self.headers = None
 
     def _generate_hash(self):
@@ -88,7 +89,7 @@ class DataProcessor:
         
         self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
 
-    def prepare_dataset(self, examples, labels, seed=None):
+    def prepare_dataset(self, examples, labels, split_strategy="all", seed=None):
 
         N = len(examples)
         data = []
@@ -130,12 +131,23 @@ class DataProcessor:
         X = np.concatenate(tuple(data), axis=1)
         y = np.array(labels)
 
-        (train_X, train_y),(val_X, val_y) = self.split_dataset(X,y,self.validation_split, seed)
+        match split_strategy:
+            case "all":
+                split = self.split_data(X,y,self.validation_split, seed)
+            case "objectID" | "trackID":
+                header_idx = 0 if split_strategy == "objectID" else 1
+                split = self.split_data_by_object(X, y, self.headers, 
+                                                   self.number_of_training_examples_per_class,
+                                                   self.validation_split,
+                                                   split_on_header_idx=header_idx)
+            case _:
+                raise ValueError(f"Split strategy {split_strategy} not recognized")
+        
+        (train_X, train_y),(val_X, val_y) = split
 
         return (train_X, train_y), (val_X, val_y)
 
-    def split_dataset(self, X,y, split=0.1, seed=None):
-        #TODO: split by objects -> use header_dict
+    def split_data(self, X,y, split=0.1, seed=None):
         if seed:
             random.seed(seed)
         
@@ -150,6 +162,32 @@ class DataProcessor:
         val_y = y[S:]
 
         return (train_X, train_y), (val_X, val_y)
+
+    def split_data_by_object(self, X, Y, headers, k, split=0.1, split_on_header_idx=0):
+        for l in range(len(self.class_names)):
+            mask = Y == l
+            x = X[mask]
+            h = headers[mask][:, split_on_header_idx]
+
+            x_obj = [x[h==idx] for idx in np.unique(h)]
+            sizes = list(map(len, x_obj))
+            N = sum(sizes)
+
+            indices = np.argsort(-np.array(sizes))
+
+            total = 0
+            train = np.empty((0, *x[0].shape[1:]))
+            val = np.empty((0, *x[0].shape[1:]))
+
+            for i in range(len(indices)):
+                if (sizes[indices[i]] + total < k*1.1 and sizes[indices[i]] + total < N * (1-split)) or \
+                    (total == 0 and sizes[indices[i]] + total < N * (1-split)):
+                    total += sizes[indices[i]]
+                    train = np.concatenate((train, x_obj[indices[i]]))
+                else:
+                    val = np.concatenate((val, x_obj[indices[i]]))
+
+            return train, val
 
     def _convert_to_magnitude_in(self, data_dict): 
         for label in data_dict:
