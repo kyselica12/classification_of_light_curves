@@ -3,7 +3,6 @@ import random
 import hashlib
 import re
 import glob
-from collections import defaultdict
 import numpy as np
 import pandas as pd
 from scipy import optimize
@@ -61,7 +60,7 @@ class DataProcessor:
 
         self.examples = np.loadtxt(f'{path}/examples.txt')
         self.labels = np.loadtxt(f'{path}/labels.txt')
-        self.headers = np.loadtxt(f'{path}/labels.txt')
+        self.headers = np.loadtxt(f'{path}/headers.txt')
 
     def load_raw_data_MMT(self):
         data_dict, header_dict, columns = self._read_csv_files()
@@ -84,13 +83,10 @@ class DataProcessor:
         self.labels = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
         self.examples = np.concatenate([data_dict[l] for l in self.class_names])
         self.headers = np.concatenate([header_dict[l] for l in self.class_names])
-        # self.examples = np.concatenate(list(data_dict.values()))
-        # self.headers = np.concatenate(list(header_dict.values()))
         
         self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
 
     def prepare_dataset(self, examples, labels, split_strategy="all", seed=None):
-
         N = len(examples)
         data = []
         lc = examples[:,:LC_SIZE]
@@ -98,12 +94,8 @@ class DataProcessor:
         fc = fc_std[:,:2*FOURIER_N+1]
         std = fc_std[:,2*FOURIER_N+1:]
 
-        print(list(fc[0]))
-
         phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
-        print(fc.shape, std.shape, lc.shape)
         y_hat = np.array([self._fourier8(phases, *(list(fc[i]))) for i in range(N)])
-        print(y_hat.shape)
         
         amplitude = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
         residuals = np.abs(lc - y_hat) / (amplitude + 1e-6)
@@ -141,7 +133,7 @@ class DataProcessor:
                                                    self.validation_split,
                                                    split_on_header_idx=header_idx)
             case _:
-                raise ValueError(f"Split strategy {split_strategy} not recognized")
+                raise ValueError(f"Split strategy {split_strategy} not recognized. Use one of: 'all', 'objectID', 'trackID'")
         
         (train_X, train_y),(val_X, val_y) = split
 
@@ -176,18 +168,22 @@ class DataProcessor:
             indices = np.argsort(-np.array(sizes))
 
             total = 0
-            train = np.empty((0, *x[0].shape[1:]))
-            val = np.empty((0, *x[0].shape[1:]))
+            train_X = np.empty((0, *x.shape[1:]))
+            train_y = np.empty((0,))
+            val_X = np.empty((0, *x.shape[1:]))
+            val_y = np.empty((0,))
 
-            for i in range(len(indices)):
-                if (sizes[indices[i]] + total < k*1.1 and sizes[indices[i]] + total < N * (1-split)) or \
-                    (total == 0 and sizes[indices[i]] + total < N * (1-split)):
-                    total += sizes[indices[i]]
-                    train = np.concatenate((train, x_obj[indices[i]]))
+            for i, idx in enumerate(indices):
+                if (sizes[idx] + total < k*1.1 and sizes[idx] + total < N * (1-split)) or \
+                    (total == 0 and sizes[idx] + total < N * (1-split)):
+                    total += sizes[idx]
+                    train_X = np.concatenate((train_X, x_obj[idx]))
+                    train_y = np.concatenate((train_y, np.ones((x_obj[idx].shape[0],))))
                 else:
-                    val = np.concatenate((val, x_obj[indices[i]]))
+                    val_X = np.concatenate((val_X, x_obj[idx]))
+                    val_y = np.concatenate((val_y, np.ones((x_obj[idx].shape[0],))))
 
-            return train, val
+            return (train_X, train_y), (val_X, val_y)
 
     def _convert_to_magnitude_in(self, data_dict): 
         for label in data_dict:
@@ -205,7 +201,7 @@ class DataProcessor:
             if label := self.get_object_label(name, self.class_names, self.regexes):
                 df = pd.read_csv(file)
                 arr = df.to_numpy()
-                header = arr[:,:3] #FIXME: check if only first 3 columns are header
+                header = arr[:,:3]
                 lc = arr[:,3:]
 
                 data_dict[label].append(lc)
