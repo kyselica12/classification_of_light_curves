@@ -30,18 +30,26 @@ class FilterConfig:
     non_zero_ratio: float = 0.8
     rms_ratio: float = 0. 
 
+class SplitStrategy(StrEnum):
+    RANDOM = "random"
+    OBJECT_ID = "objectID"
+    TRACK_ID = "trackID"
+
 @dataclass 
 class DataConfig:
     path: str = ""
     output_path: str = None
+
     class_names: List[str] = field(default_factory=list)
     regexes: List[str] = field(default_factory=list)
     validation_split: float = 0.2
+    split_strategy: str = SplitStrategy.RANDOM
+    seed: int = 42
     number_of_training_examples_per_class: int = 10_000
     filter_config: FilterConfig = field(default_factory=lambda: FilterConfig())
     convert_to_mag: bool = False
     max_amplitude: float = 20
-    args: dict = field(default_factory=dict)
+
     fourier: bool = False
     std: bool = False
     rms: bool = False
