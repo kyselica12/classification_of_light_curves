@@ -8,7 +8,7 @@ import pandas as pd
 from scipy import optimize
 import tqdm
 
-from src_refactored.configs import DataConfig, LC_SIZE, FOURIER_N
+from src_refactored.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy
 from src_refactored.filters import filter_data
 from src_refactored.dataset import LCDataset
 
@@ -26,6 +26,8 @@ class DataProcessor:
         self.convert_to_mag = data_config.convert_to_mag
         self.max_amplitude = data_config.max_amplitude
         self.filter_config = data_config.filter_config
+        self.split_strategy = data_config.split_strategy
+        self.seed = data_config.seed
 
         self.use_fourier = data_config.fourier
         self.use_std = data_config.std
@@ -86,7 +88,7 @@ class DataProcessor:
         
         self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
 
-    def prepare_dataset(self, examples, labels, split_strategy="all", seed=None):
+    def prepare_dataset(self, examples, labels):
         N = len(examples)
         data = []
         lc = examples[:,:LC_SIZE]
@@ -123,23 +125,27 @@ class DataProcessor:
         X = np.concatenate(tuple(data), axis=1)
         y = np.array(labels)
 
-        match split_strategy:
-            case "all":
-                split = self.split_data(X,y,self.validation_split, seed)
-            case "objectID" | "trackID":
-                header_idx = 0 if split_strategy == "objectID" else 1
-                split = self.split_data_by_object(X, y, self.headers, 
+        return self.split_dataset(X, y)
+    
+    def split_dataset(self, X, y):
+        match self.split_strategy:
+            case SplitStrategy.RANDOM:
+                split = self._split_random(X,y,self.validation_split, self.seed)
+            case SplitStrategy.OBJECT_ID | SplitStrategy.TRACK_ID:
+                header_idx = 0 if self.split_strategy == "objectID" else 1
+                split = self._split_by_object_or_track(X, y, self.headers, 
                                                    self.number_of_training_examples_per_class,
                                                    self.validation_split,
                                                    split_on_header_idx=header_idx)
             case _:
-                raise ValueError(f"Split strategy {split_strategy} not recognized. Use one of: 'all', 'objectID', 'trackID'")
-        
+                raise ValueError(f"Split strategy {self.split_strategy} not recognized. Use one of: 'random', 'objectID', 'trackID'")
+
         (train_X, train_y),(val_X, val_y) = split
 
-        return (train_X, train_y), (val_X, val_y)
+        return (train_X, train_y),(val_X, val_y)  
 
-    def split_data(self, X,y, split=0.1, seed=None):
+
+    def _split_random(self, X,y, split=0.1, seed=None):
         if seed:
             random.seed(seed)
         
@@ -155,7 +161,7 @@ class DataProcessor:
 
         return (train_X, train_y), (val_X, val_y)
 
-    def split_data_by_object(self, X, Y, headers, k, split=0.1, split_on_header_idx=0):
+    def _split_by_object_or_track(self, X, Y, headers, k, split=0.1, split_on_header_idx=0):
         for l in range(len(self.class_names)):
             mask = Y == l
             x = X[mask]
