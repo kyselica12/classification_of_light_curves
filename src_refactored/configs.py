@@ -46,7 +46,7 @@ class NetConfig:
     input_size: int = 300
     output_size: int = 5
     architecture: NetArchitecture = NetArchitecture.FC
-    args: dict = field(default_factory=dict)
+    args: ModelConfig = None
 
 
 @dataclass

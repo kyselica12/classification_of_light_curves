@@ -7,15 +7,32 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from src_refactored.configs import ModelConfig, NetArchitecture
+from src_refactored.module.cnn import CNN
+from src_refactored.module.cnnfc import CNNFC
+from src_refactored.module.fc import FC
+
 
 class LCModule(pl.LightningModule):
 
-    def __init__ (self, n_classes, net):
-        self.net = net
-        self.n_classes = n_classes
+    def __init__ (self, cfg:ModelConfig):
+        self.cfg = cfg
+        self.n_classes = cfg.output_size
+        self.net = self._initialize_net(cfg)
 
         self.save_hyperparameters()
         self.criterion = nn.CrossEntropyLoss()
+    
+    def _initialize_net(self, cfg: ModelConfig):
+        match cfg.architecture:
+            case NetArchitecture.FC:
+                return FC(cfg.args)
+            case NetArchitecture.CNN:
+                return CNN(cfg.args)
+            case NetArchitecture.CNNFC:
+                return CNNFC(cfg.args)
+            case _:
+                raise ValueError(f"Unknown architecture {cfg.architecture}")
 
     def forward(self, x):
         logits = self.net(x)
