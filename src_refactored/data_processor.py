@@ -69,8 +69,8 @@ class DataProcessor:
             self._convert_to_magnitude_in(data_dict)
 
         if self.filter_config:
-            data_dict = filter_data(data_dict, self.filter_config)
-            
+            data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
+
         columns += [f"Fourier coef " for i in range(16)]
         print("Computing Fourier....")
 
@@ -79,9 +79,12 @@ class DataProcessor:
             for d in tqdm.tqdm(data, desc=f"Fourier for class {label}"):
                 fourier_coefs.append(np.concatenate(self._foufit(d)))
 
+    
         self.labels = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
-        self.examples = np.concatenate(list(data_dict.values()))
-        self.headers = np.concatenate(list(header_dict.values()))
+        self.examples = np.concatenate([data_dict[l] for l in self.class_names])
+        self.headers = np.concatenate([header_dict[l] for l in self.class_names])
+        # self.examples = np.concatenate(list(data_dict.values()))
+        # self.headers = np.concatenate(list(header_dict.values()))
         
         self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
 
