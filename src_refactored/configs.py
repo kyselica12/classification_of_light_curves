@@ -1,7 +1,8 @@
+from collections import namedtuple
 import numpy as np
 from dataclasses import dataclass, field
 from strenum import StrEnum
-from typing import List
+from typing import List, Tuple
 
 
 PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
@@ -9,9 +10,35 @@ WANDB_KEY_FILE = "wandb.key"
 LC_SIZE = 300
 FOURIER_N = 8
 
+@dataclass
+class ModelConfig:
+    input_size: int = 300
+    output_size: int = 5
+
+ConvLayer = namedtuple("ConvLayer", ["out_ch", "kernel", "stride"], defaults=[1,3,1])
+@dataclass
+class CNNConfig(ModelConfig):
+    in_channels: int = 1
+    conv_layers: List[ConvLayer] = field(default_factory=list)
+    classifier_layers: List[int] = field(default_factory=list)
+
+@dataclass
+class FCConfig(ModelConfig):
+    layers: List[int] = field(default_factory=list)
+
+@dataclass
+class CNNFCConfig(ModelConfig):
+    in_channels: int = 1
+    cnn_input_size: int = 0
+    cnn_layers: List[Tuple] = field(default_factory=list)
+    fc_output_dim: int = 10
+    fc_layers: List[int] = field(default_factory=list)
+    classifier_layers: List[int] = field(default_factory=list)
+
 class NetArchitecture(StrEnum):
     FC = "FullyConnected"
     CNN = "CNN"
+    CNNFC = "CNNFC"
 
 @dataclass
 class NetConfig:

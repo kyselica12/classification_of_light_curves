@@ -40,7 +40,6 @@ class CNNFCConfig(ModelConfig):
     fc_layers: List[int] = field(default_factory=list)
     classifier_layers: List[int] = field(default_factory=list)
 
-
 @dataclass_json
 @dataclass
 class NetConfig:
@@ -48,8 +47,6 @@ class NetConfig:
     save_path: str = f"{PACKAGE_PATH}/resources/models"
     net_class: str = "Net"
     model_config: ModelConfig = None
-
-
 
 @dataclass_json
 @dataclass
