@@ -9,8 +9,8 @@ from scipy import optimize
 import tqdm
 
 from src_refactored.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy
-from src_refactored.filters import filter_data
-from src_refactored.dataset import LCDataset
+from src_refactored.data.filters import filter_data
+from src_refactored.data.dataset import LCDataset
 
 
 class DataProcessor:
