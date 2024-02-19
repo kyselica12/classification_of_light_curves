@@ -73,6 +73,18 @@ class DataProcessor:
         if self.filter_config:
             data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
 
+        # print(self.class_names)
+        # print([(l,i,len(data_dict[l]) )for i, l in enumerate(self.class_names)])
+        # print(self.labels.shape)
+        # print(np.unique(self.labels))
+        # return
+
+        # print([(l, len(data_dict[l])) for l in self.class_names])
+        # print(sum([len(data_dict[l]) for l in self.class_names]))
+        # print([sum([len(d) for d in data_dict[l]]) for l in self.class_names])
+        # self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
+        return
+
         columns += [f"Fourier coef " for i in range(16)]
         print("Computing Fourier....")
 
@@ -162,8 +174,14 @@ class DataProcessor:
         return (train_X, train_y), (val_X, val_y)
 
     def _split_by_object_or_track(self, X, Y, headers, k, split=0.1, split_on_header_idx=0):
-        for l in range(len(self.class_names)):
-            mask = Y == l
+
+        train_X = np.empty((0, *X.shape[1:]))
+        train_y = np.empty((0,))
+        val_X = np.empty((0, *X.shape[1:]))
+        val_y = np.empty((0,))
+
+        for label in range(len(self.class_names)):
+            mask = Y == label
             x = X[mask]
             h = headers[mask][:, split_on_header_idx]
 
@@ -172,24 +190,19 @@ class DataProcessor:
             N = sum(sizes)
 
             indices = np.argsort(-np.array(sizes))
-
             total = 0
-            train_X = np.empty((0, *x.shape[1:]))
-            train_y = np.empty((0,))
-            val_X = np.empty((0, *x.shape[1:]))
-            val_y = np.empty((0,))
 
-            for i, idx in enumerate(indices):
+            for idx in indices:
                 if (sizes[idx] + total < k*1.1 and sizes[idx] + total < N * (1-split)) or \
                     (total == 0 and sizes[idx] + total < N * (1-split)):
                     total += sizes[idx]
                     train_X = np.concatenate((train_X, x_obj[idx]))
-                    train_y = np.concatenate((train_y, np.ones((x_obj[idx].shape[0],))))
+                    train_y = np.concatenate((train_y, np.ones((x_obj[idx].shape[0],))*label))
                 else:
                     val_X = np.concatenate((val_X, x_obj[idx]))
-                    val_y = np.concatenate((val_y, np.ones((x_obj[idx].shape[0],))))
+                    val_y = np.concatenate((val_y, np.ones((x_obj[idx].shape[0],))*label))
 
-            return (train_X, train_y), (val_X, val_y)
+        return (train_X, train_y), (val_X, val_y)
 
     def _convert_to_magnitude_in(self, data_dict): 
         for label in data_dict:
