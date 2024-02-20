@@ -18,7 +18,7 @@ class CNN(BaseNet):
         dim = cfg.input_size
         for out_ch, kernel, stride in cfg.conv_layers:
             layers.extend([
-                nn.Conv1d(in_ch, out_ch, kernel_size=kernel, stride=stride, padding=kernel//2),
+                nn.Conv1d(in_ch, out_ch, kernel_size=kernel, stride=stride, padding=kernel//2, padding_mode='circular'),
                 nn.BatchNorm1d(out_ch),
                 nn.ReLU(),
                 nn.MaxPool1d(kernel_size=3, stride=2, padding=1)
