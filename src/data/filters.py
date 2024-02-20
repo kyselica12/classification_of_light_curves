@@ -3,8 +3,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from functools import partial
 
-from src.data.data_load import dict_map
-from src.config import FilterConfig
+from src.configs import FilterConfig
 
 def get_filter_continuous(data, n_bins=10, gap=0, continous_gap=3):
     N = 300 // n_bins
@@ -43,13 +42,13 @@ def apply_filters(data, filters_f, operation="AND"):
     
     return data[f_res]
 
-def apply_sequential_filters(data, filters):
-
+def apply_sequential_filters(data, headers,  filters):
     for f in filters:
         ok = f(data)
         data = data[ok]
+        headers = headers[ok]
 
-    return data
+    return data, headers
 
 def get_rms_filter(data_list, rms_ratio=0.5):
     
@@ -71,9 +70,9 @@ def get_rms_filter(data_list, rms_ratio=0.5):
 
         ok[i] = rms / (ampl+10**(-6)) <= rms_ratio
 
-    return ok
+    return ok 
 
-def filter_data(data, cfg: FilterConfig):
+def filter_data(data_dict, header_dict, cfg: FilterConfig):
     filters = []
     filters.append(partial(get_filter_continuous, n_bins=cfg.n_bins, 
                                                 gap=cfg.n_gaps, 
@@ -83,12 +82,10 @@ def filter_data(data, cfg: FilterConfig):
     app_filters_p = partial(apply_sequential_filters, filters=filters)
 
     filtered_data = {}
-    for label in data:
-        tmp = []
-        for d in data[label]:
-            r = app_filters_p(d)
-            if len(r) > 0:
-                tmp.append(r)
-        filtered_data[label] = tmp
+    filtered_headers = {}
+    for label in data_dict:
+        data, headers = app_filters_p(data_dict[label], header_dict[label])
+        filtered_data[label] = data
+        filtered_headers[label] = headers
     
-    return filtered_data
+    return filtered_data, filtered_headers
