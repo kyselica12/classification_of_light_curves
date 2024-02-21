@@ -1,0 +1,12 @@
+program: src/main.py
+
+project: sweep_test
+
+method: grid 
+metric:
+  goal: minimize
+  name: val_loss
+
+parameters:
+  batch_size:
+    values: [8,16,32]

@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 
 PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
-WANDB_KEY_FILE = "wandb.key"
+WANDB_KEY_FILE = f"{PACKAGE_PATH}/wandb.key"
 LC_SIZE = 300
 FOURIER_N = 8
 

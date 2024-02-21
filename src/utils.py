@@ -48,7 +48,7 @@ def train(module: LCModule,
                               shuffle=False,
                               drop_last=True)
     
-    trainer = Trainer(default_root_dir='TODO',
+    trainer = Trainer(default_root_dir='TODO', #TODO: Better default root dir
                       max_epochs=num_epochs,
                       logger=logger,
                       callbacks=callbacks)

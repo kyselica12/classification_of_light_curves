@@ -109,23 +109,23 @@ class DataProcessor:
         lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
         lc[np.isnan(lc)] = 0
         
-        if self.use_lc:
+        if self.use_lc: # shape (N, LC_SIZE)
             data.append(lc)
-        if self.use_reconstructed:
+        if self.use_reconstructed: # shape (N, LC_SIZE)
             recontructed_lc = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
             data.append(recontructed_lc)
-        if self.use_residuals:
+        if self.use_residuals: # shape (N, LC_SIZE)
             data.append(residuals)
-        if self.use_fourier:
+        if self.use_fourier: # shape (N, FOURIER_N)
             data.append(fc[:,1:])
-        if self.use_std:
+        if self.use_std: # shape (N, FOURIER_N)
             data.append(std[:,1:])
-        if self.use_rms:
+        if self.use_rms: # shape (N, 1)
             rms = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6))
             data.append(rms.reshape(-1,1))
-        if self.use_amplitude:
+        if self.use_amplitude: # shape (N, 1)
             data.append(amplitude / self.max_amplitude)
-        if self.use_wavelet_transform:
+        if self.use_wavelet_transform: # shape (N, scales*LC_SIZE)
             scales = np.arange(1, self.wavelet_scales+1)
             coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
             coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
