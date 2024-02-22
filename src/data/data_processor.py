@@ -40,18 +40,8 @@ class DataProcessor:
         self.use_data_types = data_config.data_types
         self.data = {}
 
-        self.hash = self._generate_hash()
-
-    def _generate_hash(self):
         hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
-        # hash_text += f'_{self.wavelet_scales}_{self.wavelet_name}'
-        return hashlib.md5(hash_text.encode()).hexdigest()
-    
-    def _save_data_type(self, t):
-        filename = f"{self.output_path}/{self.hash}/{t}"
-        if t == DataType.WAVELET:
-            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
-        np.savetxt(filename+".txt", self.data[t])
+        self.hash = hashlib.md5(hash_text.encode()).hexdigest()
 
     def save_data(self):
         path = f'{self.output_path}/{self.hash}'
@@ -62,7 +52,24 @@ class DataProcessor:
                 self._save_data_type(t)
             else:
                 print(f"Data type {t} is None. Skipping...")
+
+    def _save_data_type(self, t):
+        filename = f"{self.output_path}/{self.hash}/{t}"
+        if t == DataType.WAVELET:
+            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
+        np.savetxt(filename+".txt", self.data[t])
     
+    def load_data_from_file(self):
+        to_load = set([LABELS, HEADERS, DataType.AMPLITUDE,
+                       *self.use_data_types])
+        for t in to_load:
+            if (data := self._load_data_type(t)) is not None:
+                self.data[t] = data
+            elif t == DataType.WAVELET:
+                lc = self.data[DataType.LC]
+                self._compute_wavelet_transform(lc, len(lc))
+                self._save_data_type(t)
+
     def _load_data_type(self, t):
         filename = f"{self.output_path}/{self.hash}/{t}"
         if t == DataType.WAVELET:
@@ -73,21 +80,9 @@ class DataProcessor:
             return np.loadtxt(filename)
         
         return None
-    
+
     def unload(self):
         self.data.clear()
-
-    def load_data_from_file(self):
-        to_load = set([LABELS, HEADERS, DataType.AMPLITUDE,
-                       *self.use_data_types])
-
-        for t in to_load:
-            if (data := self._load_data_type(t)) is not None:
-                self.data[t] = data
-            elif t == DataType.WAVELET:
-                lc = self.data[DataType.LC]
-                self._compute_wavelet_transform(lc, len(lc))
-                self._save_data_type(t)
 
     def create_dataset_from_csv(self):
         print("Reading csv files....")
@@ -119,15 +114,6 @@ class DataProcessor:
         self.data[DataType.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
         self.data[DataType.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
 
-    def _compute_wavelet_transform(self):
-        print("Computing Continuous Wavelet Transform....")
-        lc = self.data[DataType.LC]
-        #TODO: Excange ZEROs with Recontructed values????
-        scales = np.arange(1, self.wavelet_scales+1)
-        coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
-        coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
-        self.data[DataType.WAVELET] = coef.reshape(len(lc),-1)
-
     def prepare_dataset(self):
         examples = []
 
@@ -152,6 +138,15 @@ class DataProcessor:
         y = self.data[LABELS]
 
         return self.split_dataset(X, y)
+
+    def _compute_wavelet_transform(self):
+        print("Computing Continuous Wavelet Transform....")
+        lc = self.data[DataType.LC]
+        #TODO: Excange ZEROs with Recontructed values????
+        scales = np.arange(1, self.wavelet_scales+1)
+        coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
+        coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
+        self.data[DataType.WAVELET] = coef.reshape(len(lc),-1)
                     
     def split_dataset(self, X, y):
         match self.split_strategy:

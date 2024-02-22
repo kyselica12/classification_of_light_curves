@@ -66,7 +66,7 @@ if __name__ == "__main__":
     )
 
     dp = DataProcessor(data_config)
-    dp.load_data_MMT()
+    dp.load_data_from_file()
     module = LCModule(module_config)
     logger = get_wandb_logger(PROJECT, NAME)
 
