@@ -1,3 +1,4 @@
+from collections import defaultdict
 import os
 import random
 import hashlib
@@ -8,11 +9,14 @@ import pandas as pd
 import pywt
 from scipy import optimize
 import tqdm
+from strenum import StrEnum
 
-from src.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy
+from src.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy, DataType
 from src.data.filters import filter_data
 from src.data.dataset import LCDataset
 
+LABELS = "labels"
+HEADERS = "headers"
 
 class DataProcessor:
     
@@ -30,45 +34,63 @@ class DataProcessor:
         self.split_strategy = data_config.split_strategy
         self.seed = data_config.seed
 
-        self.use_fourier = data_config.fourier
-        self.use_std = data_config.std
-        self.use_residuals = data_config.residuals
-        self.use_rms = data_config.rms
-        self.use_amplitude = data_config.amplitude
-        self.use_lc = data_config.lc
-        self.use_reconstructed = data_config.reconstructed_lc
-        self.use_wavelet_transform = data_config.wavelet
         self.wavelet_scales = data_config.wavelet_scales
         self.wavelet_name = data_config.wavelet_name
-        self.push_to_max = data_config.push_to_max
 
-        self.examples = None
-        self.labels = None
-        # ObjectID, TrackID, Phase
-        self.headers = None
+        self.use_data_types = data_config.data_types
+        self.data = {}
+
+        self.hash = self._generate_hash()
 
     def _generate_hash(self):
         hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
+        # hash_text += f'_{self.wavelet_scales}_{self.wavelet_name}'
         return hashlib.md5(hash_text.encode()).hexdigest()
+    
+    def _save_data_type(self, t):
+        filename = f"{self.output_path}/{self.hash}/{t}"
+        if t == DataType.WAVELET:
+            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
+        np.savetxt(filename+".txt", self.data[t])
 
-    def save_data_MMT(self):
-        hash = self._generate_hash()
-        path = f'{self.output_path}/{hash}'
+    def save_data(self):
+        path = f'{self.output_path}/{self.hash}'
         os.makedirs(path, exist_ok=True)
 
-        np.savetxt(f"{path}/examples.txt", self.examples)
-        np.savetxt(f"{path}/labels.txt", self.labels)
-        np.savetxt(f"{path}/headers.txt", self.headers)
+        for t in self.data:
+            if self.data[t] is not None:
+                self._save_data_type(t)
+            else:
+                print(f"Data type {t} is None. Skipping...")
+    
+    def _load_data_type(self, t):
+        filename = f"{self.output_path}/{self.hash}/{t}"
+        if t == DataType.WAVELET:
+            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
+        filename += ".txt"
+        
+        if os.path.exists(filename):
+            return np.loadtxt(filename)
+        
+        return None
+    
+    def unload(self):
+        self.data.clear()
 
-    def load_data_MMT(self):
-        hash = self._generate_hash()
-        path = f'{self.output_path}/{hash}'
+    def load_data_from_file(self):
+        to_load = set([LABELS, HEADERS, DataType.AMPLITUDE,
+                       *self.use_data_types])
 
-        self.examples = np.loadtxt(f'{path}/examples.txt')
-        self.labels = np.loadtxt(f'{path}/labels.txt')
-        self.headers = np.loadtxt(f'{path}/headers.txt')
+        for t in to_load:
+            if (data := self._load_data_type(t)) is not None:
+                self.data[t] = data
+            elif t == DataType.WAVELET:
+                lc = self.data[DataType.LC]
+                self._compute_wavelet_transform(lc, len(lc))
+                self._save_data_type(t)
 
-    def load_raw_data_MMT(self):
+    def create_dataset_from_csv(self):
+        print("Reading csv files....")
         data_dict, header_dict, columns = self._read_csv_files()
 
         if self.convert_to_mag:
@@ -77,72 +99,67 @@ class DataProcessor:
         if self.filter_config:
             data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
 
-        columns += [f"Fourier coef " for i in range(16)]
-        print("Computing Fourier....")
+        self.data[LABELS] = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
+        self.data[HEADERS] = np.concatenate([header_dict[l] for l in self.class_names])
+        lc = self.data[DataType.LC] = np.concatenate([data_dict[l] for l in self.class_names])
+        N = len(lc)
 
-        fourier_coefs = []
-        for label, data in data_dict.items():
-            for d in tqdm.tqdm(data, desc=f"Fourier for class {label}"):
-                fourier_coefs.append(np.concatenate(self._foufit(d)))
-
-        self.labels = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
-        self.headers = np.concatenate([header_dict[l] for l in self.class_names])
-        self.examples = np.concatenate([data_dict[l] for l in self.class_names])
-        self.examples = np.concatenate((self.examples, np.array(fourier_coefs)), axis=1)
-
-
-    def prepare_dataset(self, examples, labels):
-        N = len(examples)
-        data = []
-        lc = examples[:,:LC_SIZE]
-        fc_std = examples[:,LC_SIZE:]
-        fc = fc_std[:,:2*FOURIER_N+1]
-        std = fc_std[:,2*FOURIER_N+1:]
+        print("Computing Fourier Series....")
+        # fc_std = np.array(list(map(self._foufit, self.data[DataType.LC])))
+        fc_std = np.array([self._foufit(d) for d in tqdm.tqdm(self.data[DataType.LC])])
+        fourier_coefs = self.data[DataType.FS] = fc_std[:,0]
+        self.data[DataType.STD] = fc_std[:,1]
 
         phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
-        y_hat = np.array([self._fourier8(phases, *(list(fc[i]))) for i in range(N)])
+        y_hat = np.array([self._fourier8(phases, *(list(c))) for c in fourier_coefs])
         
-        amplitude = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
-        residuals = np.abs(lc - y_hat) / (amplitude + 1e-6)
+        amplitude = self.data[DataType.AMPLITUDE] = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
+        residuals = self.data[DataType.RESIDUALS] =  np.abs(lc - y_hat) / (amplitude + 1e-6)
 
-        lc[lc == 0] = np.nan
-        lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
-        lc[np.isnan(lc)] = 0
+        self.data[DataType.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
+        self.data[DataType.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
+
+    def _compute_wavelet_transform(self):
+        print("Computing Continuous Wavelet Transform....")
+        lc = self.data[DataType.LC]
+        #TODO: Excange ZEROs with Recontructed values????
+        scales = np.arange(1, self.wavelet_scales+1)
+        coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
+        coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
+        self.data[DataType.WAVELET] = coef.reshape(len(lc),-1)
+
+    def prepare_dataset(self):
+        examples = []
+
+        for t in self.use_data_types:
+            match t:
+                case DataType.LC:
+                    lc = self.data[t].copy()
+                    lc[lc == 0] = np.nan
+                    lc[lc == 0] = np.nan
+                    print(lc.shape, np.nanmin(lc, axis=1, keepdims=True).shape, self.data[DataType.AMPLITUDE].shape)
+                    lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (self.data[DataType.AMPLITUDE].reshape(-1,1) + 1e-6)
+                    lc[np.isnan(lc)] = 0
+                    examples.append(lc)
+                case DataType.FS | DataType.STD:
+                    examples.append(self.data[t][:,1:]) 
+                case DataType.AMPLITUDE:
+                    examples.append(self.data[t] / self.max_amplitude.reshape(-1, 1))
+                case _:
+                    examples.append(self.data[t])
         
-        if self.use_lc: # shape (N, LC_SIZE)
-            data.append(lc)
-        if self.use_reconstructed: # shape (N, LC_SIZE)
-            recontructed_lc = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
-            data.append(recontructed_lc)
-        if self.use_residuals: # shape (N, LC_SIZE)
-            data.append(residuals)
-        if self.use_fourier: # shape (N, FOURIER_N)
-            data.append(fc[:,1:])
-        if self.use_std: # shape (N, FOURIER_N)
-            data.append(std[:,1:])
-        if self.use_rms: # shape (N, 1)
-            rms = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6))
-            data.append(rms.reshape(-1,1))
-        if self.use_amplitude: # shape (N, 1)
-            data.append(amplitude / self.max_amplitude)
-        if self.use_wavelet_transform: # shape (N, scales*LC_SIZE)
-            scales = np.arange(1, self.wavelet_scales+1)
-            coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
-            coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
-            data.append(coef.reshape(N,-1))
-
-        X = np.concatenate(tuple(data), axis=1)
-        y = np.array(labels)
+        X = np.concatenate(tuple(examples), axis=1)
+        y = self.data[LABELS]
 
         return self.split_dataset(X, y)
-    
+                    
     def split_dataset(self, X, y):
         match self.split_strategy:
             case SplitStrategy.RANDOM:
                 split = self._split_random(X,y,self.validation_split, self.seed)
             case SplitStrategy.OBJECT_ID | SplitStrategy.TRACK_ID:
                 header_idx = 0 if self.split_strategy == "objectID" else 1
-                split = self._split_by_object_or_track(X, y, self.headers, 
+                split = self._split_by_object_or_track(X, y, self.data[HEADERS], 
                                                    self.number_of_training_examples_per_class,
                                                    self.validation_split,
                                                    split_on_header_idx=header_idx)
@@ -200,7 +217,7 @@ class DataProcessor:
                     val_y = np.concatenate((val_y, np.ones((x_obj[idx].shape[0],))*label))
 
         return (train_X, train_y), (val_X, val_y)
-
+    
     def _convert_to_magnitude_in(self, data_dict): 
         for label in data_dict:
             for i in range(len(data_dict[label])):
@@ -287,10 +304,10 @@ class DataProcessor:
     
     def get_pytorch_datasets(self, train_transform=None, val_transform=None):
 
-        if  self.examples is None or self.class_names is None:
+        if  len(self.data) < 3:
             raise Exception("No Data loaded yet. Please load data first.")
         
-        (train_X, train_y), (val_X, val_y) = self.prepare_dataset(self.examples, self.labels)
+        (train_X, train_y), (val_X, val_y) = self.prepare_dataset()
 
         train_set = LCDataset(train_X, train_y, train_transform)
         val_set = LCDataset(val_X, val_y, val_transform)

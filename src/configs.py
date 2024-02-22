@@ -2,7 +2,7 @@ from collections import namedtuple
 import numpy as np
 from dataclasses import dataclass, field
 from strenum import StrEnum
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
@@ -63,6 +63,16 @@ class SplitStrategy(StrEnum):
     OBJECT_ID = "objectID"
     TRACK_ID = "trackID"
 
+class DataType(StrEnum):
+    LC = "light_curve"
+    FS = "fourier_series_coefs"
+    STD = "fourier_series_std"
+    RECONSTRUCTED_LC = "reconstructed_lc"
+    RESIDUALS = "residuals"
+    RMS = "rms"
+    AMPLITUDE = "amplitude"
+    WAVELET = "wavelet_transform"
+
 @dataclass 
 class DataConfig:
     path: str = ""
@@ -78,15 +88,20 @@ class DataConfig:
     convert_to_mag: bool = False
     max_amplitude: float = 20
 
-    fourier: bool = False
-    std: bool = False
-    rms: bool = False
-    residuals: bool = False
-    amplitude: bool = False
-    lc: bool = False
-    reconstructed_lc: bool = False
-    push_to_max: bool = False
-    wavelet: bool = False
-    wavelet_scales: int = 30
     wavelet_name: str = "morl"
+    wavelet_scales: int = 30
+
+    data_types: List[DataType | Tuple] = field(default_factory=list)
+
+    # fourier: bool = False
+    # std: bool = False
+    # rms: bool = False
+    # residuals: bool = False
+    # amplitude: bool = False
+    # lc: bool = False
+    # reconstructed_lc: bool = False
+    # push_to_max: bool = False
+    # wavelet: bool = False
+    # wavelet_scales: int = 30
+    # wavelet_name: str = "morl"
  
