@@ -78,6 +78,7 @@ class LCModule(pl.LightningModule):
     def _get_logit_pred_acc_loss(self, batch, batch_idx):
         x, y = batch
         logits = self.forward(x)
+        print(x.shape,logits.shape, y.shape)
         losses = self.criterion(logits, y.long())
         preds = torch.argmax(logits, dim=1)
         acc = (preds == y).float().mean()

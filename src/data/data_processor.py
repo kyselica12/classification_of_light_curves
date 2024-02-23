@@ -146,11 +146,9 @@ class DataProcessor:
                 case DT.LC:
                     lc = self.data[t].copy()
                     lc[lc == 0] = np.nan
-                    lc[lc == 0] = np.nan
-                    print(lc.shape, np.nanmin(lc, axis=1, keepdims=True).shape, self.data[DT.AMPLITUDE].shape)
                     lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (self.data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
                     lc[np.isnan(lc)] = 0
-                    examples.append(lc)
+                    examples.append(self._compute_lc_shifts(lc))
                 case DT.FS | DT.STD:
                     examples.append(self.data[t][:,1:]) 
                 case DT.AMPLITUDE:
@@ -162,6 +160,17 @@ class DataProcessor:
         y = self.data[LABELS]
 
         return self.split_dataset(X, y)
+    
+    def _compute_lc_shifts(self, lc):
+        if self.lc_shifts == 0:
+            return lc
+
+        shifts = [lc.copy()]
+        shift_size = LC_SIZE//(self.lc_shifts+1)
+        for i in range(self.lc_shifts):
+             shifts.append(np.roll(lc, i * shift_size , axis=1))
+        return np.concatenate(shifts, axis=1)
+        
 
     def _compute_wavelet_transform(self):
         print("Computing Continuous Wavelet Transform....")

@@ -95,10 +95,10 @@ class DataConfig:
 
     wavelet_name: str = "morl"
     wavelet_scales: int = 30
-    lc_shifts = 0
+    lc_shifts: int = 0
 
     data_types: List[DataType | Tuple] = field(default_factory=list)
-    train_augmentations: List = None
+    train_augmentations: List[Augmentations] = None
 
     # fourier: bool = False
     # std: bool = False
