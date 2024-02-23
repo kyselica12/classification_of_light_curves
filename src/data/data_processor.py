@@ -11,7 +11,8 @@ from scipy import optimize
 import tqdm
 from strenum import StrEnum
 
-from src.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy, DataType
+from src.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy
+from src.configs import DataType as DT
 from src.data.filters import filter_data
 from src.data.dataset import LCDataset
 
@@ -36,12 +37,35 @@ class DataProcessor:
 
         self.wavelet_scales = data_config.wavelet_scales
         self.wavelet_name = data_config.wavelet_name
+        self.lc_shifts = data_config.lc_shifts
 
         self.use_data_types = data_config.data_types
         self.data = {}
 
         hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
         self.hash = hashlib.md5(hash_text.encode()).hexdigest()
+    
+    def data_shape(self):
+        shape = 0
+        for t in self.use_data_types: 
+            match t:
+                case DT.FS | DT.STD:
+                    shape += FOURIER_N*2 -1 
+                case DT.WAVELET:
+                    shape += self.wavelet_scales * LC_SIZE
+                case DT.AMPLITUDE | DT.RMS: 
+                    shape += 1
+                case DT.LC:
+                    shape += LC_SIZE * (self.lc_shifts + 1)
+                case DT.RECONSTRUCTED_LC:
+                    shape += LC_SIZE
+                case DT.RESIDUALS:
+                    shape += LC_SIZE
+                case _:
+                    raise ValueError(f"Data type {t} not recognized")
+
+        return shape
+        
 
     def save_data(self):
         path = f'{self.output_path}/{self.hash}'
@@ -55,24 +79,24 @@ class DataProcessor:
 
     def _save_data_type(self, t):
         filename = f"{self.output_path}/{self.hash}/{t}"
-        if t == DataType.WAVELET:
+        if t == DT.WAVELET:
             filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
         np.savetxt(filename+".txt", self.data[t])
     
     def load_data_from_file(self):
-        to_load = set([LABELS, HEADERS, DataType.AMPLITUDE,
+        to_load = set([LABELS, HEADERS, DT.AMPLITUDE,
                        *self.use_data_types])
         for t in to_load:
             if (data := self._load_data_type(t)) is not None:
                 self.data[t] = data
-            elif t == DataType.WAVELET:
-                lc = self.data[DataType.LC]
+            elif t == DT.WAVELET:
+                lc = self.data[DT.LC]
                 self._compute_wavelet_transform(lc, len(lc))
                 self._save_data_type(t)
 
     def _load_data_type(self, t):
         filename = f"{self.output_path}/{self.hash}/{t}"
-        if t == DataType.WAVELET:
+        if t == DT.WAVELET:
             filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
         filename += ".txt"
         
@@ -96,40 +120,40 @@ class DataProcessor:
 
         self.data[LABELS] = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
         self.data[HEADERS] = np.concatenate([header_dict[l] for l in self.class_names])
-        lc = self.data[DataType.LC] = np.concatenate([data_dict[l] for l in self.class_names])
+        lc = self.data[DT.LC] = np.concatenate([data_dict[l] for l in self.class_names])
         N = len(lc)
 
         print("Computing Fourier Series....")
-        # fc_std = np.array(list(map(self._foufit, self.data[DataType.LC])))
-        fc_std = np.array([self._foufit(d) for d in tqdm.tqdm(self.data[DataType.LC])])
-        fourier_coefs = self.data[DataType.FS] = fc_std[:,0]
-        self.data[DataType.STD] = fc_std[:,1]
+        # fc_std = np.array(list(map(self._foufit, self.data[DT.LC])))
+        fc_std = np.array([self._foufit(d) for d in tqdm.tqdm(self.data[DT.LC])])
+        fourier_coefs = self.data[DT.FS] = fc_std[:,0]
+        self.data[DT.STD] = fc_std[:,1]
 
         phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
         y_hat = np.array([self._fourier8(phases, *(list(c))) for c in fourier_coefs])
         
-        amplitude = self.data[DataType.AMPLITUDE] = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
-        residuals = self.data[DataType.RESIDUALS] =  np.abs(lc - y_hat) / (amplitude + 1e-6)
+        amplitude = self.data[DT.AMPLITUDE] = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
+        residuals = self.data[DT.RESIDUALS] =  np.abs(lc - y_hat) / (amplitude + 1e-6)
 
-        self.data[DataType.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
-        self.data[DataType.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
+        self.data[DT.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
+        self.data[DT.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
 
     def prepare_dataset(self):
         examples = []
 
         for t in self.use_data_types:
             match t:
-                case DataType.LC:
+                case DT.LC:
                     lc = self.data[t].copy()
                     lc[lc == 0] = np.nan
                     lc[lc == 0] = np.nan
-                    print(lc.shape, np.nanmin(lc, axis=1, keepdims=True).shape, self.data[DataType.AMPLITUDE].shape)
-                    lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (self.data[DataType.AMPLITUDE].reshape(-1,1) + 1e-6)
+                    print(lc.shape, np.nanmin(lc, axis=1, keepdims=True).shape, self.data[DT.AMPLITUDE].shape)
+                    lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (self.data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
                     lc[np.isnan(lc)] = 0
                     examples.append(lc)
-                case DataType.FS | DataType.STD:
+                case DT.FS | DT.STD:
                     examples.append(self.data[t][:,1:]) 
-                case DataType.AMPLITUDE:
+                case DT.AMPLITUDE:
                     examples.append(self.data[t] / self.max_amplitude.reshape(-1, 1))
                 case _:
                     examples.append(self.data[t])
@@ -141,12 +165,12 @@ class DataProcessor:
 
     def _compute_wavelet_transform(self):
         print("Computing Continuous Wavelet Transform....")
-        lc = self.data[DataType.LC]
+        lc = self.data[DT.LC]
         #TODO: Excange ZEROs with Recontructed values????
         scales = np.arange(1, self.wavelet_scales+1)
         coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
         coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
-        self.data[DataType.WAVELET] = coef.reshape(len(lc),-1)
+        self.data[DT.WAVELET] = coef.reshape(len(lc),-1)
                     
     def split_dataset(self, X, y):
         match self.split_strategy:
@@ -297,15 +321,15 @@ class DataProcessor:
         
         return None if res == [] else res[0]
     
-    def get_pytorch_datasets(self, train_transform=None, val_transform=None):
+    def get_pytorch_datasets(self):
 
         if  len(self.data) < 3:
             raise Exception("No Data loaded yet. Please load data first.")
         
         (train_X, train_y), (val_X, val_y) = self.prepare_dataset()
 
-        train_set = LCDataset(train_X, train_y, train_transform)
-        val_set = LCDataset(val_X, val_y, val_transform)
+        train_set = LCDataset(train_X, train_y, self.data_config.train_augmentations)
+        val_set = LCDataset(val_X, val_y, None)
 
         return train_set, val_set
 

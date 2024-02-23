@@ -20,6 +20,7 @@ class LCModule(pl.LightningModule):
         super().__init__()
         self.cfg: NetConfig = cfg
         self.n_classes = cfg.output_size
+        self.learning_rate = cfg.learning_rate
         self.net = self._initialize_net(cfg)
         self.net = self.net.float()
 
@@ -84,7 +85,7 @@ class LCModule(pl.LightningModule):
         return logits, preds, acc, losses
     
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 

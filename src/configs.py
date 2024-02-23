@@ -45,6 +45,7 @@ class NetConfig:
     name: str = "DEFAULT"
     input_size: int = 300
     output_size: int = 5
+    learning_rate: float = 1e-3
     class_names: List[str] = field(default_factory=list)
     architecture: NetArchitecture = NetArchitecture.FC
     args: ModelConfig = None
@@ -73,6 +74,10 @@ class DataType(StrEnum):
     AMPLITUDE = "amplitude"
     WAVELET = "wavelet_transform"
 
+class Augmentations(StrEnum):
+    SHIFT = "shift"
+    INSERT_GAP = "insert_gap"
+
 @dataclass 
 class DataConfig:
     path: str = ""
@@ -90,8 +95,10 @@ class DataConfig:
 
     wavelet_name: str = "morl"
     wavelet_scales: int = 30
+    lc_shifts = 0
 
     data_types: List[DataType | Tuple] = field(default_factory=list)
+    train_augmentations: List = None
 
     # fourier: bool = False
     # std: bool = False

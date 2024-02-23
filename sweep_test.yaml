@@ -1,0 +1,16 @@
+program: src/main.py
+
+project: sweep_test
+
+method: grid 
+metric:
+  goal: minimize
+  name: test
+
+parameters:
+  batch_size:
+    values: [8,16,32]
+  epochs:
+    values: [10,20,30]
+  arr:
+    values: [[1,2,3],[4],[7,8,9]]
