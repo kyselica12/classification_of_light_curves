@@ -1,12 +1,17 @@
-program: src/main.py
-
 project: sweep_test
+name: CNN
+program: src/main.py
 
 method: grid 
 metric:
   goal: minimize
-  name: val_loss
+  name: val_loss_epoch
 
 parameters:
-  batch_size:
-    values: [8,16,32]
+  lc:
+    values: [[True, 0], [True, 1], [True, 2], [True, 3], [False, 0]] 
+  reconstructed:
+    values: [True, False]
+  residuals:
+    values: [True, False]
+

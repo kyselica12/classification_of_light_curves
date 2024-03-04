@@ -27,8 +27,8 @@ class LCModule(pl.LightningModule):
         self.save_hyperparameters()
         self.criterion = nn.CrossEntropyLoss()
 
-        self.val_preds = None
-        self.val_target = None
+        self.val_preds = []
+        self.val_target = []
     
     def _initialize_net(self, cfg: NetConfig):
         match cfg.architecture:
@@ -51,7 +51,6 @@ class LCModule(pl.LightningModule):
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log('train_acc', acc, on_step=True, on_epoch=True, prog_bar=True)
 
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -60,25 +59,33 @@ class LCModule(pl.LightningModule):
         self.log("val_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("val_acc", acc, on_step=True, on_epoch=True, prog_bar=True)
 
-        self.val_preds = preds
-        self.val_target = batch[1]
+        self.val_preds.append(preds)
+        self.val_target.append(batch[1])
 
         return loss
     
     def on_validation_epoch_end(self):
-        if self.val_preds is None:
-            return
+        y_true = torch.cat(self.val_target).cpu().numpy()
+        preds = torch.cat(self.val_preds).cpu().numpy()
 
-        # self.log({'conf_mat': wandb.plot.confusion_matrix(probs=None,
-        #                     y_true=self.val_target,
-        #                     preds=self.val_preds,
-        #                     class_names=self.cfg.class_names)})
+        if self.val_preds == [] or len(np.unique(y_true)) != len(self.cfg.class_names):
+            return 
+
+        print("===========================================================VALIDATION EPOCH END============================================================")
+        print(y_true.shape, np.unique(y_true), preds.shape, np.unique(preds), self.cfg.class_names)
+        print("===========================================================PRINT CONFUSION MATRIX============================================================")
+        wandb.log({'conf_mat': wandb.plot.confusion_matrix(
+                            y_true=y_true,
+                            preds=preds,
+                            class_names=self.cfg.class_names)})
+
+        self.val_preds = []
+        self.val_target = []
 
     
     def _get_logit_pred_acc_loss(self, batch, batch_idx):
         x, y = batch
         logits = self.forward(x)
-        print(x.shape,logits.shape, y.shape)
         losses = self.criterion(logits, y.long())
         preds = torch.argmax(logits, dim=1)
         acc = (preds == y).float().mean()

@@ -56,7 +56,7 @@ class DataProcessor:
                 case DT.AMPLITUDE | DT.RMS: 
                     shape += 1
                 case DT.LC:
-                    shape += LC_SIZE * (self.lc_shifts + 1)
+                    shape += LC_SIZE * (1 + self.lc_shifts)
                 case DT.RECONSTRUCTED_LC:
                     shape += LC_SIZE
                 case DT.RESIDUALS:
@@ -84,15 +84,16 @@ class DataProcessor:
         np.savetxt(filename+".txt", self.data[t])
     
     def load_data_from_file(self):
-        to_load = set([LABELS, HEADERS, DT.AMPLITUDE,
+        to_load = list([LABELS, HEADERS, DT.LC, DT.AMPLITUDE,
                        *self.use_data_types])
         for t in to_load:
+            if t in self.data: continue
             if (data := self._load_data_type(t)) is not None:
                 self.data[t] = data
             elif t == DT.WAVELET:
                 lc = self.data[DT.LC]
-                self._compute_wavelet_transform(lc, len(lc))
-                self._save_data_type(t)
+                self._compute_wavelet_transform()
+                #self._save_data_type(t)
 
     def _load_data_type(self, t):
         filename = f"{self.output_path}/{self.hash}/{t}"

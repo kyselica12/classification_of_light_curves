@@ -35,6 +35,7 @@ def train(module: LCModule,
         logger.log_hyperparams({"data": dp.data_config.__dict__})
     
     train_set, val_set = dp.get_pytorch_datasets()
+    dp.data.clear()
 
     train_loader = DataLoader(train_set, 
                               batch_size=batch_size,

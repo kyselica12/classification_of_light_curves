@@ -4,8 +4,9 @@ from dataclasses import dataclass, field
 from strenum import StrEnum
 from typing import Dict, List, Tuple
 
+PACKAGE_PATH = "/home/k/kyselica12/work/classification_of_light_curves"
+# PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
 
-PACKAGE_PATH = "/home/poirot/work/classification_of_light_curves"
 WANDB_KEY_FILE = f"{PACKAGE_PATH}/wandb.key"
 LC_SIZE = 300
 FOURIER_N = 8
@@ -65,14 +66,14 @@ class SplitStrategy(StrEnum):
     TRACK_ID = "trackID"
 
 class DataType(StrEnum):
-    LC = "light_curve"
-    FS = "fourier_series_coefs"
-    STD = "fourier_series_std"
-    RECONSTRUCTED_LC = "reconstructed_lc"
-    RESIDUALS = "residuals"
-    RMS = "rms"
-    AMPLITUDE = "amplitude"
-    WAVELET = "wavelet_transform"
+    LC = "light_curve" # LC_SIZE
+    FS = "fourier_series_coefs" # FOURIER_N x (n_shifts+1)
+    STD = "fourier_series_std" # FOURIER_N
+    RECONSTRUCTED_LC = "reconstructed_lc" # LC_SIZE
+    RESIDUALS = "residuals" # LC_SIZE
+    RMS = "rms" # 1
+    AMPLITUDE = "amplitude" # 1
+    WAVELET = "wavelet_transform" # LC_SIZE x wavelet_scales
 
 class Augmentations(StrEnum):
     SHIFT = "shift"
@@ -99,16 +100,3 @@ class DataConfig:
 
     data_types: List[DataType | Tuple] = field(default_factory=list)
     train_augmentations: List[Augmentations] = None
-
-    # fourier: bool = False
-    # std: bool = False
-    # rms: bool = False
-    # residuals: bool = False
-    # amplitude: bool = False
-    # lc: bool = False
-    # reconstructed_lc: bool = False
-    # push_to_max: bool = False
-    # wavelet: bool = False
-    # wavelet_scales: int = 30
-    # wavelet_name: str = "morl"
- 
