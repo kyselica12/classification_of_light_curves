@@ -64,6 +64,7 @@ class SplitStrategy(StrEnum):
     RANDOM = "random"
     OBJECT_ID = "objectID"
     TRACK_ID = "trackID"
+    NO_SPLIT = "no_split"
 
 class DataType(StrEnum):
     LC = "light_curve" # LC_SIZE
@@ -82,6 +83,7 @@ class Augmentations(StrEnum):
 @dataclass 
 class DataConfig:
     path: str = ""
+    validation_path: str = ""
     output_path: str = None
 
     class_names: List[str] = field(default_factory=list)

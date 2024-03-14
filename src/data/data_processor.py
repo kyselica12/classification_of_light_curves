@@ -25,8 +25,11 @@ class DataProcessor:
         self.data_config = data_config
         self.class_names = data_config.class_names
         self.regexes = data_config.regexes
+
         self.path = data_config.path
+        self.test_path = data_config.validation_path
         self.output_path = data_config.output_path
+
         self.validation_split = data_config.validation_split
         self.number_of_training_examples_per_class= data_config.number_of_training_examples_per_class
         self.convert_to_mag = data_config.convert_to_mag
@@ -41,8 +44,10 @@ class DataProcessor:
 
         self.use_data_types = data_config.data_types
         self.data = {}
+        self.test_data = {}
 
         hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
+        # hash_text += self.path + str(self.output_path) + self.test_path
         self.hash = hashlib.md5(hash_text.encode()).hexdigest()
     
     def data_shape(self):
@@ -67,36 +72,43 @@ class DataProcessor:
         return shape
         
 
-    def save_data(self):
-        path = f'{self.output_path}/{self.hash}'
+    def save_data(self, test=False):
+        path = f"{self.output_path}/{self.hash}{'/test'if test else ''}"
+        data = self.data if not test else self.test_data
         os.makedirs(path, exist_ok=True)
 
-        for t in self.data:
-            if self.data[t] is not None:
-                self._save_data_type(t)
+        for t in data:
+            if data[t] is not None:
+                self._save_data_type(t, test)
             else:
                 print(f"Data type {t} is None. Skipping...")
 
-    def _save_data_type(self, t):
-        filename = f"{self.output_path}/{self.hash}/{t}"
+    def _save_data_type(self, t, test=False):
+        # filename = f"{self.output_path}/{self.hash}/{t}"
+        filename = f"{self.output_path}/{self.hash}{'/test'if test else ''}/{t}"
+        data = self.data if not test else self.test_data
         if t == DT.WAVELET:
             filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
-        np.savetxt(filename+".txt", self.data[t])
+        np.savetxt(filename+".txt", data[t])
     
-    def load_data_from_file(self):
+    def load_data_from_file(self, test=False):
         to_load = list([LABELS, HEADERS, DT.LC, DT.AMPLITUDE,
                        *self.use_data_types])
+
+        data = self.data if not test else self.test_data
+
         for t in to_load:
-            if t in self.data: continue
-            if (data := self._load_data_type(t)) is not None:
-                self.data[t] = data
+            if t in data: continue
+            if (arr := self._load_data_type(t, test)) is not None:
+                data[t] = arr
             elif t == DT.WAVELET:
-                lc = self.data[DT.LC]
+                lc = data[DT.LC]
                 self._compute_wavelet_transform()
                 #self._save_data_type(t)
 
-    def _load_data_type(self, t):
-        filename = f"{self.output_path}/{self.hash}/{t}"
+    def _load_data_type(self, t, test=False):
+        # filename = f"{self.output_path}/{self.hash}/{t}"
+        filename = f"{self.output_path}/{self.hash}{'/test'if test else ''}/{t}"
         if t == DT.WAVELET:
             filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
         filename += ".txt"
@@ -108,59 +120,82 @@ class DataProcessor:
 
     def unload(self):
         self.data.clear()
+        self.test_data.clear()
 
+    
     def create_dataset_from_csv(self):
-        print("Reading csv files....")
-        data_dict, header_dict, columns = self._read_csv_files()
+        def read_dataset(data, read_function):
+            print(f"Reading csv files....")
+            data_dict, header_dict, _ = read_function()
 
-        if self.convert_to_mag:
-            self._convert_to_magnitude_in(data_dict)
+            if self.convert_to_mag:
+                self._convert_to_magnitude_in(data_dict)
 
-        if self.filter_config:
-            data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
+            if self.filter_config:
+                data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
 
-        self.data[LABELS] = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
-        self.data[HEADERS] = np.concatenate([header_dict[l] for l in self.class_names])
-        lc = self.data[DT.LC] = np.concatenate([data_dict[l] for l in self.class_names])
-        N = len(lc)
+            data[LABELS] = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
+            data[HEADERS] = np.concatenate([header_dict[l] for l in self.class_names])
+            lc = data[DT.LC] = np.concatenate([data_dict[l] for l in self.class_names])
 
-        print("Computing Fourier Series....")
-        # fc_std = np.array(list(map(self._foufit, self.data[DT.LC])))
-        fc_std = np.array([self._foufit(d) for d in tqdm.tqdm(self.data[DT.LC])])
-        fourier_coefs = self.data[DT.FS] = fc_std[:,0]
-        self.data[DT.STD] = fc_std[:,1]
+            print("Computing Fourier Series....")
+            fc_std = np.array([self._foufit(d) for d in tqdm.tqdm(data[DT.LC])])
+            fourier_coefs = data[DT.FS] = fc_std[:,0]
+            data[DT.STD] = fc_std[:,1]
 
-        phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
-        y_hat = np.array([self._fourier8(phases, *(list(c))) for c in fourier_coefs])
-        
-        amplitude = self.data[DT.AMPLITUDE] = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
-        residuals = self.data[DT.RESIDUALS] =  np.abs(lc - y_hat) / (amplitude + 1e-6)
+            phases = np.linspace(0, 1, LC_SIZE, endpoint=False)
+            y_hat = np.array([self._fourier8(phases, *(list(c))) for c in fourier_coefs])
+            
+            amplitude = data[DT.AMPLITUDE] = (np.max(y_hat, axis=1) - np.min(y_hat, axis=1)).reshape(-1,1)
+            residuals = data[DT.RESIDUALS] =  np.abs(lc - y_hat) / (amplitude + 1e-6)
 
-        self.data[DT.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
-        self.data[DT.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
+            data[DT.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
+            data[DT.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
+
+
+        read_dataset(self.data, self._read_csv_files)
+
+        if self.test_path != "":
+            read_dataset(self.test_data, self._read_SDLCD_csv)
+
 
     def prepare_dataset(self):
-        examples = []
+        def prepare(data):
+            examples = []
+            for t in self.use_data_types:
+                match t:
+                    case DT.LC:
+                        lc = data[t].copy()
+                        lc[lc == 0] = np.nan
+                        lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
+                        lc[np.isnan(lc)] = 0
+                        examples.append(self._compute_lc_shifts(lc))
+                    case DT.FS | DT.STD:
+                        examples.append(data[t][:,1:]) 
+                    case DT.AMPLITUDE:
+                        examples.append(data[t] / self.max_amplitude.reshape(-1, 1))
+                    case _:
+                        examples.append(data[t])
 
-        for t in self.use_data_types:
-            match t:
-                case DT.LC:
-                    lc = self.data[t].copy()
-                    lc[lc == 0] = np.nan
-                    lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (self.data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
-                    lc[np.isnan(lc)] = 0
-                    examples.append(self._compute_lc_shifts(lc))
-                case DT.FS | DT.STD:
-                    examples.append(self.data[t][:,1:]) 
-                case DT.AMPLITUDE:
-                    examples.append(self.data[t] / self.max_amplitude.reshape(-1, 1))
-                case _:
-                    examples.append(self.data[t])
-        
+            return examples
+
+
+
+        examples = prepare(self.data)
         X = np.concatenate(tuple(examples), axis=1)
         y = self.data[LABELS]
 
-        return self.split_dataset(X, y)
+        train_set, val_set = self.split_dataset(X,y)
+        test_set = (None, None)
+        
+        if self.test_data != {}:
+            test_examples = prepare(self.test_data)
+            X_test = np.concatenate(tuple(test_examples), axis=1)
+            y_test = self.test_data[LABELS]
+            test_set = (X_test, y_test)
+        
+        return (train_set, val_set, test_set)
+
     
     def _compute_lc_shifts(self, lc):
         if self.lc_shifts == 0:
@@ -192,6 +227,8 @@ class DataProcessor:
                                                    self.number_of_training_examples_per_class,
                                                    self.validation_split,
                                                    split_on_header_idx=header_idx)
+            case SplitStrategy.NO_SPLIT:
+                split = ((X,y),([], []))
             case _:
                 raise ValueError(f"Split strategy {self.split_strategy} not recognized. Use one of: 'random', 'objectID', 'trackID'")
 
@@ -252,7 +289,31 @@ class DataProcessor:
             for i in range(len(data_dict[label])):
                 arr = data_dict[label][i]
                 arr[arr != 0] = -2.5 * np.log10(arr[arr != 0])
+
+    def _read_SDLCD_csv(self):
+        df = pd.read_csv(self.test_path)
+        arr = df.to_numpy()
+        columns = list(df.columns)
+
+        data_dict = {c: [] for c in self.class_names}
+        header_dict = {c: [] for c in self.class_names}
+
+        for x in arr:
+            name = x[0].replace(' ', '_')
+            if label := self.get_object_label(name, self.class_names, self.regexes):
+                data_dict[label].append(x[4:])
+                header = x[1:4]
+                for i in range(26):
+                    header[0] = header[0].replace(chr(ord('A')+i), str(i))
+                header_dict[label].append(header)
         
+        for l in self.class_names:
+            data_dict[l] = np.array(data_dict[l]).reshape(-1, LC_SIZE).astype(np.float32)
+            header_dict[l] = np.array(header_dict[l]).reshape(-1, 3).astype(np.float32)
+
+        return data_dict, header_dict, columns
+        
+       
     def _read_csv_files(self):
         data_dict = {c: [] for c in self.class_names}
         header_dict = {c: [] for c in self.class_names}
@@ -336,10 +397,11 @@ class DataProcessor:
         if  len(self.data) < 3:
             raise Exception("No Data loaded yet. Please load data first.")
         
-        (train_X, train_y), (val_X, val_y) = self.prepare_dataset()
+        (train_X, train_y), (val_X, val_y), (test_X, test_y) = self.prepare_dataset()
 
         train_set = LCDataset(train_X, train_y, self.data_config.train_augmentations)
         val_set = LCDataset(val_X, val_y, None)
+        test_set = LCDataset(test_X, test_y, None)
 
-        return train_set, val_set
+        return train_set, val_set, test_set
 
