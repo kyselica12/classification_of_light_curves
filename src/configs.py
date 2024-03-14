@@ -48,6 +48,7 @@ class NetConfig:
     output_size: int = 5
     learning_rate: float = 1e-3
     label_smoothing: float = 0.
+    use_mixup: bool = False
     class_names: List[str] = field(default_factory=list)
     architecture: NetArchitecture = NetArchitecture.FC
     args: ModelConfig = None

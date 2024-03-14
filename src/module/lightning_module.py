@@ -7,11 +7,13 @@ import wandb
 
 import torch.nn as nn
 import torch.optim as optim
+from troch.autograd import Variable
 
 from src.configs import NetConfig, NetArchitecture
 from src.module.cnn import CNN
 from src.module.cnnfc import CNNFC
 from src.module.fc import FC
+from src.data.augmentations import mixup_data, mixup_criterion
 
 
 class LCModule(pl.LightningModule):
@@ -21,10 +23,14 @@ class LCModule(pl.LightningModule):
         self.cfg: NetConfig = cfg
         self.n_classes = cfg.output_size
         self.learning_rate = cfg.learning_rate
+        self.use_mixup = cfg.use_mixup
+
         self.net = self._initialize_net(cfg)
         self.net = self.net.float()
 
         self.log_confusion_matrix = False
+
+        self.mixup_alpha = 0.2
 
         self.save_hyperparameters()
         self.criterion = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
@@ -101,13 +107,20 @@ class LCModule(pl.LightningModule):
             self._log_conf_matrix(self.test_preds, self.test_target, "test")
     
     def _get_logit_pred_acc_loss(self, batch, batch_idx):
-        x, y = batch
-        logits = self.forward(x)
-        losses = self.criterion(logits, y.long())
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == y).float().mean()
+        inputs, targets = batch
+        logits = self.forward(inputs)
 
-        return logits, preds, acc, losses
+        if self.use_mixup:
+            inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, self.mixup_alpha, use_cuda=True)
+            inputs, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
+            loss = mixup_criterion(self.criterion, logits, targets_a, targets_b, lam)
+        else:
+            loss = self.criterion(logits, targets.long())
+
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == targets).float().mean()
+
+        return logits, preds, acc, loss
 
     
     def configure_optimizers(self):
