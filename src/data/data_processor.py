@@ -380,6 +380,7 @@ class DataProcessor:
         std = np.sqrt(np.diag(params_covariance))
 
         return params, std
+    
 
     def get_object_label(self, name, labels, regexes=None):
         def remove_extra_chars(string):

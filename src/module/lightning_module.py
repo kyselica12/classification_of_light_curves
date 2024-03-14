@@ -27,7 +27,7 @@ class LCModule(pl.LightningModule):
         self.log_confusion_matrix = False
 
         self.save_hyperparameters()
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
 
         self.val_preds = []
         self.val_target = []
