@@ -7,7 +7,7 @@ import wandb
 
 import torch.nn as nn
 import torch.optim as optim
-from troch.autograd import Variable
+from torch.autograd import Variable
 
 from src.configs import NetConfig, NetArchitecture
 from src.module.cnn import CNN
@@ -56,7 +56,7 @@ class LCModule(pl.LightningModule):
         return logits
 
     def training_step(self, batch, batch_idx):
-        _, _, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx)
+        _, _, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx, mixup=self.use_mixup)
 
         self.log('train_loss', loss, prog_bar=True)
         self.log('train_acc', acc, prog_bar=True)
@@ -64,7 +64,7 @@ class LCModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        _, preds, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx)
+        _, preds, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx, mixup=False)
 
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         self.log("val_acc", acc, on_epoch=True, prog_bar=True)
@@ -76,7 +76,7 @@ class LCModule(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        _, preds, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx)
+        _, preds, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx, mixup=False)
 
         self.log("test_loss", loss, on_epoch=True)
         self.log("test_acc", acc, on_epoch=True)
@@ -106,14 +106,14 @@ class LCModule(pl.LightningModule):
         if self.log_confusion_matrix:
             self._log_conf_matrix(self.test_preds, self.test_target, "test")
     
-    def _get_logit_pred_acc_loss(self, batch, batch_idx):
+    def _get_logit_pred_acc_loss(self, batch, batch_idx, mixup=False):
         inputs, targets = batch
         logits = self.forward(inputs)
 
-        if self.use_mixup:
+        if mixup:
             inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, self.mixup_alpha, use_cuda=True)
             inputs, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
-            loss = mixup_criterion(self.criterion, logits, targets_a, targets_b, lam)
+            loss = mixup_criterion(self.criterion, logits, targets_a.long(), targets_b.long(), lam)
         else:
             loss = self.criterion(logits, targets.long())
 
