@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any
 import numpy as np
 import pytorch_lightning as pl
@@ -13,7 +14,8 @@ from src.configs import NetConfig, NetArchitecture
 from src.module.cnn import CNN
 from src.module.cnnfc import CNNFC
 from src.module.fc import FC
-from src.data.augmentations import mixup_data, mixup_criterion
+# from src.data.augmentations import mixup_data, mixup_criterion
+from src.module.resnet import resnet, resnet20
 
 
 class LCModule(pl.LightningModule):
@@ -32,11 +34,15 @@ class LCModule(pl.LightningModule):
 
         self.mixup_alpha = 0.2
 
+        self.sweep = cfg.sweep
+        if self.sweep:
+            self.log = wandb.log
+
         self.save_hyperparameters()
         self.criterion = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
 
-        self.val_preds = []
-        self.val_target = []
+        self.val_preds = defaultdict(list)
+        self.val_target = defaultdict(list)
         self.test_preds = []
         self.test_target = []
     
@@ -48,6 +54,8 @@ class LCModule(pl.LightningModule):
                 return CNN(cfg.args)
             case NetArchitecture.CNNFC:
                 return CNNFC(cfg.args)
+            case NetArchitecture.RESNET:
+                return resnet(cfg.args)
             case _:
                 raise ValueError(f"Unknown architecture {cfg.architecture}")
 
@@ -63,15 +71,15 @@ class LCModule(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         _, preds, acc, loss = self._get_logit_pred_acc_loss(batch, batch_idx, mixup=False)
 
-        self.log("val_loss", loss, on_epoch=True, prog_bar=True)
-        self.log("val_acc", acc, on_epoch=True, prog_bar=True)
+        self.log(f"val_loss_{dataloader_idx}", loss, on_epoch=True, prog_bar=True)
+        self.log(f"val_acc_{dataloader_idx}", acc, on_epoch=True, prog_bar=True)
 
         if self.log_confusion_matrix:
-            self.val_preds.append(preds)
-            self.val_target.append(batch[1])
+            self.val_preds[dataloader_idx].append(preds)
+            self.val_target[dataloader_idx].append(batch["target"])
 
         return loss
 
@@ -83,39 +91,48 @@ class LCModule(pl.LightningModule):
 
         if self.log_confusion_matrix:
             self.test_preds.append(preds)
-            self.test_target.append(batch[1])
+            self.test_target.append(batch["target"])
 
         return loss
 
     def _log_conf_matrix(self, preds, target, name=""):
         y_true = torch.concatenate(target).cpu().numpy()
         y_preds = torch.concatenate(preds).cpu().numpy()
-        wandb.log({f'{name}_conf_mat': wandb.plot.confusion_matrix(
-                            y_true=y_true,
-                            preds=y_preds,
-                            class_names=self.cfg.class_names)})   
+        try:
+            wandb.log({f'{name}_conf_mat': wandb.plot.confusion_matrix(
+                                y_true=y_true,
+                                preds=y_preds,
+                                class_names=self.cfg.class_names)})   
+        except:
+            print("Error logging confusion matrix")
         preds.clear()
         target.clear()
         
 
     def on_validation_epoch_end(self):
         if self.log_confusion_matrix:
-            self._log_conf_matrix(self.val_preds, self.val_target, "val")
+            for k in self.val_preds.keys():
+                self._log_conf_matrix(self.val_preds[k], self.val_target[k], f"val_{k}")
+            # self._log_conf_matrix(self.val_preds, self.val_target, "val")
     
     def on_test_epoch_end(self) -> None:
         if self.log_confusion_matrix:
             self._log_conf_matrix(self.test_preds, self.test_target, "test")
     
     def _get_logit_pred_acc_loss(self, batch, batch_idx, mixup=False):
-        inputs, targets = batch
+        inputs = batch["data"]
+        targets = batch["target"]
+        inputs = inputs.unsqueeze(1)
         logits = self.forward(inputs)
 
         if mixup:
-            inputs, targets_a, targets_b, lam = mixup_data(inputs, targets, self.mixup_alpha, use_cuda=True)
-            inputs, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
-            loss = mixup_criterion(self.criterion, logits, targets_a.long(), targets_b.long(), lam)
+            targets2 = batch["target2"]
+            lam = batch["lam"]
+            loss = lam * self.criterion(logits, targets.long()) + (1-lam) * self.criterion(logits, targets2.long()) 
         else:
             loss = self.criterion(logits, targets.long())
+
+        loss = loss.mean()
 
         preds = torch.argmax(logits, dim=1)
         acc = (preds == targets).float().mean()

@@ -34,14 +34,15 @@ def train(module: LCModule,
           callbacks: list = [],
           sampler=False,
           max_num_samples=10**6,
-          logger = None):
+          logger = None,
+          unload=False):
 
     if logger is not None and isinstance(logger, WandbLogger):
         logger.log_hyperparams({"data": dp.data_config.__dict__})
-        module.log_confusion_matrix = True
 
-    
     train_set, val_set, test_set = dp.get_pytorch_datasets()
+    if unload:
+        dp.unload_data()
     
     wr_sampler = None
     if sampler:
@@ -63,25 +64,33 @@ def train(module: LCModule,
                               num_workers=num_workers,
                               shuffle=False,
                               drop_last=True)
+
+    print("Loaders created.")
     
     test_loader = None
+    val_loaders = [val_loader]
     if test_set is not None:
         test_loader = DataLoader(test_set, 
-                                batch_size=batch_size,
+                                # batch_size=batch_size,
+                                batch_size=1,
                                 num_workers=num_workers,
                                 shuffle=False,
                                 drop_last=True)
-        # val_loaders.append(test_loader)
-        
+        val_loaders.append(test_loader)
+
     
     trainer = Trainer(default_root_dir='TODO', #TODO: Better default root dir
                       max_epochs=num_epochs,
                       logger=logger,
-                      callbacks=callbacks)
+                      callbacks=callbacks,
+                      num_nodes=1,
+                      devices=1,)
     
-    trainer.fit(module, train_loader, val_loader)
+    print("Starting training...")
+    trainer.fit(module, train_loader, val_loaders)
 
-    trainer.test(module, test_loader)
+    if test_loader is not None:
+        trainer.test(module, test_loader)
 
     if logger is not None and isinstance(logger, WandbLogger):
         wandb.finish()

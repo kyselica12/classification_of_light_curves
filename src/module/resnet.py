@@ -9,6 +9,8 @@ import torch.nn.init as init
 
 from torch.autograd import Variable
 
+from src.configs import ResNetConfig
+
 __all__ = ['ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet']
 
 def _weights_init(m):
@@ -28,26 +30,19 @@ class LambdaLayer(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, option='A'):
+    def __init__(self, in_planes, planes, stride=1):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv1d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1 = nn.Conv1d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False, padding_mode='circular')
         self.bn1 = nn.BatchNorm1d(planes)
-        self.conv2 = nn.Conv1d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv1d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False, padding_mode='circular')
         self.bn2 = nn.BatchNorm1d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
-            if option == 'A':
-                """
-                For CIFAR10 ResNet paper uses option A.
-                """
-                self.shortcut = LambdaLayer(lambda x:
-                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
-            elif option == 'B':
-                self.shortcut = nn.Sequential(
-                     nn.Conv1d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-                     nn.BatchNorm1d(self.expansion * planes)
-                )
+            self.shortcut = nn.Sequential(
+                    nn.Conv1d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False, padding_mode='circular'),
+                    nn.BatchNorm1d(self.expansion * planes)
+            )
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -58,11 +53,12 @@ class BasicBlock(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10, in_channels=1):
         super(ResNet, self).__init__()
         self.in_planes = 16
+        self.in_channels = in_channels
 
-        self.conv1 = nn.Conv1d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv1d(in_channels, 16, kernel_size=3, stride=1, padding=1, bias=False, padding_mode='circular')
         self.bn1 = nn.BatchNorm1d(16)
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
@@ -81,29 +77,39 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        x = x.reshape(x.shape[0], self.in_channels, -1)
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
-        out = F.avg_pool1d(out, out.size()[3])
+        out = F.avg_pool1d(out, out.size()[2])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+    
+    def get_embedding(self, x):
+        x = x.reshape(x.shape[0], self.in_channels, -1)
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        return out
 
 
-def resnet20(num_classes=10):
-    return ResNet(BasicBlock, [3, 3, 3], num_classes)
+def resnet20(num_classes=10, n_channels=1):
+    return ResNet(BasicBlock, [3, 3, 3], num_classes, n_channels)
 
-def resnet32(num_classes=10):
-    return ResNet(BasicBlock, [5, 5, 5], num_classes)
+def resnet32(num_classes=10, n_channels=1):
+    return ResNet(BasicBlock, [5, 5, 5], num_classes, n_channels)
 
-def resnet44(num_classes=10):
-    return ResNet(BasicBlock, [7, 7, 7], num_classes)
+def resnet44(num_classes=10, n_channels=1):
+    return ResNet(BasicBlock, [7, 7, 7], num_classes, n_channels)
 
-def resnet(k=20, num_classes=10):
-    assert (k - 2) % 6 == 0
+def resnet(cfg: ResNetConfig):
+    k = cfg.n_layers
     n = (k - 2) // 6
-    return ResNet(BasicBlock, [n, n, n], num_classes)
+    return ResNet(BasicBlock, [n, n, n], cfg.output_size, cfg.in_channels)
+
 
 
 

@@ -11,6 +11,11 @@ WANDB_KEY_FILE = f"{PACKAGE_PATH}/wandb.key"
 LC_SIZE = 300
 FOURIER_N = 8
 
+
+RB_NAMES =   ["CZ-3B", "Falcon 9", "Atlas 5 Centaur",  "H2-A", "Ariane 5", "Delta 4", "Titan 3"]
+RB_REGEXES = [r'CZ-3B.*', r'FALCON_9.*', r'ATLAS_[5|V]_CENTAUR_R.B$',  
+             r'H-2A.*', r'ARIANE_5.*', r'DELTA_4.*', r'TITAN_3C_TRANSTAGE.*']
+
 @dataclass
 class ModelConfig:
     input_size: int = 300
@@ -36,10 +41,16 @@ class CNNFCConfig(ModelConfig):
     fc_layers: List[int] = field(default_factory=list)
     classifier_layers: List[int] = field(default_factory=list)
 
+@dataclass
+class ResNetConfig(ModelConfig):
+    n_layers: int = 20
+    in_channels: int = 1
+
 class NetArchitecture(StrEnum):
     FC = "FullyConnected"
     CNN = "CNN"
     CNNFC = "CNNFC"
+    RESNET = "ResNet"
 
 @dataclass
 class NetConfig:
@@ -52,6 +63,7 @@ class NetConfig:
     class_names: List[str] = field(default_factory=list)
     architecture: NetArchitecture = NetArchitecture.FC
     args: ModelConfig = None
+    sweep: bool = False
 
 
 @dataclass
@@ -78,14 +90,24 @@ class DataType(StrEnum):
     AMPLITUDE = "amplitude" # 1
     WAVELET = "wavelet_transform" # LC_SIZE x wavelet_scales
 
-class Augmentations(StrEnum):
+class DatasetType(StrEnum):
+    TRAIN = "train"
+    TEST = "test"
+    ARTIFICIAL = "artificial"
+
+class AugmentType(StrEnum):
     SHIFT = "shift"
     INSERT_GAP = "insert_gap"
+    MIX_UP = "mix_up"
+    NOISE = "noise"
+
+MIX_UP_ALPHA = 0.2
 
 @dataclass 
 class DataConfig:
     path: str = ""
     validation_path: str = ""
+    artificial_data_path: str = None
     output_path: str = None
 
     class_names: List[str] = field(default_factory=list)
@@ -99,8 +121,11 @@ class DataConfig:
     max_amplitude: float = 20
 
     wavelet_name: str = "morl"
-    wavelet_scales: int = 30
+    wavelet_scales_step: int = 1
+    wavelet_start_scale: int = 1
+    wavelet_end_scale: int = 100
+
     lc_shifts: int = 0
 
     data_types: List[DataType | Tuple] = field(default_factory=list)
-    train_augmentations: List[Augmentations] = None
+    train_augmentations: List[AugmentType] = None

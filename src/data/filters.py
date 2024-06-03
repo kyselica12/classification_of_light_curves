@@ -6,6 +6,7 @@ from functools import partial
 from src.configs import FilterConfig
 
 def get_filter_continuous(data, n_bins=10, gap=0, continous_gap=3):
+    continous_gap = n_bins // 2 
     N = 300 // n_bins
 
     x = np.resize(data, (data.shape[0], n_bins, N))

@@ -4,7 +4,7 @@ import tqdm
 import numpy as np
 
 from src.config import Config, PACKAGE_PATH, DataConfig, FCConfig, FilterConfig, NetConfig
-from src.train import Trainer
+from src.main import Trainer
 from src.nn.networks.utils import get_new_net, load_net
 from src.nn.datasets.fourier import FourierDataset
 from src.experiments.constants import *

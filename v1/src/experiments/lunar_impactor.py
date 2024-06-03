@@ -6,7 +6,7 @@ from src.config import  PACKAGE_PATH, FourierDatasetConfig, FCConfig
 from src.experiments.utils import run_experiment
 from src.experiments.constants import *
 from src.experiments.utils import get_default_cfg, load_dataset_to_trainer
-from src.train import Trainer
+from src.main import Trainer
 from src.nn.networks.utils import get_new_net, load_net, save_net
 from src.experiments.utils import test_SDLCD
 from src.nn.networks.fc import FC

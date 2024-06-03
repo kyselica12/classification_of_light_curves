@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import partial
 import os
 import random
 import hashlib
@@ -12,23 +13,26 @@ import tqdm
 from strenum import StrEnum
 
 from src.configs import DataConfig, LC_SIZE, FOURIER_N, SplitStrategy
-from src.configs import DataType as DT
+from src.configs import DataType as DT, DatasetType as DST
 from src.data.filters import filter_data
 from src.data.dataset import LCDataset
 
 LABELS = "labels"
 HEADERS = "headers"
 
+
 class DataProcessor:
     
     def __init__(self, data_config: DataConfig):
         self.data_config = data_config
         self.class_names = data_config.class_names
+        self.n_classes = len(self.class_names)
         self.regexes = data_config.regexes
 
         self.path = data_config.path
         self.test_path = data_config.validation_path
         self.output_path = data_config.output_path
+        self.artificial_data_path = data_config.artificial_data_path
 
         self.validation_split = data_config.validation_split
         self.number_of_training_examples_per_class= data_config.number_of_training_examples_per_class
@@ -38,17 +42,23 @@ class DataProcessor:
         self.split_strategy = data_config.split_strategy
         self.seed = data_config.seed
 
-        self.wavelet_scales = data_config.wavelet_scales
+        self.wavelet_start = data_config.wavelet_start_scale
+        self.wavelet_end = data_config.wavelet_end_scale
+        self.wavelet_step = data_config.wavelet_scales_step
+        self.max_wavelet_scales = 10
         self.wavelet_name = data_config.wavelet_name
         self.lc_shifts = data_config.lc_shifts
 
         self.use_data_types = data_config.data_types
         self.data = {}
         self.test_data = {}
+        self.artificial_data = {}
 
         hash_text = f'{self.class_names}_{self.regexes}_{self.convert_to_mag}_{self.filter_config}'
+        hash_text += f"_{self.wavelet_name}"
         # hash_text += self.path + str(self.output_path) + self.test_path
         self.hash = hashlib.md5(hash_text.encode()).hexdigest()
+        print(f"Hash: {self.hash}")
     
     def data_shape(self):
         shape = 0
@@ -57,7 +67,7 @@ class DataProcessor:
                 case DT.FS | DT.STD:
                     shape += FOURIER_N*2 -1 
                 case DT.WAVELET:
-                    shape += self.wavelet_scales * LC_SIZE
+                    shape += (self.wavelet_end - self.wavelet_start + 1) // self.wavelet_step * LC_SIZE
                 case DT.AMPLITUDE | DT.RMS: 
                     shape += 1
                 case DT.LC:
@@ -72,58 +82,76 @@ class DataProcessor:
         return shape
         
 
-    def save_data(self, test=False):
-        path = f"{self.output_path}/{self.hash}{'/test'if test else ''}"
-        data = self.data if not test else self.test_data
+    def save_data(self, type=DST.TRAIN):
+        path = f"{self.output_path}/{self.hash}{'' if type==DST.TRAIN else '/'+type}"
+
+        data = self.get_data_by_type(type)
+
         os.makedirs(path, exist_ok=True)
 
         for t in data:
             if data[t] is not None:
-                self._save_data_type(t, test)
+                self._save_data_type(t, type)
             else:
                 print(f"Data type {t} is None. Skipping...")
 
-    def _save_data_type(self, t, test=False):
-        # filename = f"{self.output_path}/{self.hash}/{t}"
-        filename = f"{self.output_path}/{self.hash}{'/test'if test else ''}/{t}"
-        data = self.data if not test else self.test_data
+    def get_data_by_type(self, type):
+        match type:
+            case DST.TRAIN:
+                data = self.data
+            case DST.TEST:
+                data = self.test_data
+            case DST.ARTIFICIAL:
+                data = self.artificial_data
+        return data
+
+    def _save_data_type(self, t, type=DST.TRAIN):
+        directory = f"{self.output_path}/{self.hash}{''if type==DST.TRAIN else '/'+type}"
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        filename = f"{directory}/{t}"
+
+        data = self.get_data_by_type(type)
+        
         if t == DT.WAVELET:
-            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
-        np.savetxt(filename+".txt", data[t])
+            filename += f"_{self.wavelet_name}_{self.max_wavelet_scales}"
+        np.save(filename+".npy", data[t])
     
-    def load_data_from_file(self, test=False):
+    def load_data_from_file(self, type=DST.TRAIN):
         to_load = list([LABELS, HEADERS, DT.LC, DT.AMPLITUDE,
                        *self.use_data_types])
 
-        data = self.data if not test else self.test_data
+        data = self.get_data_by_type(type)
 
         for t in to_load:
             if t in data: continue
-            if (arr := self._load_data_type(t, test)) is not None:
+            if (arr := self._load_data_type(t, type)) is not None:
                 data[t] = arr
-            elif t == DT.WAVELET:
-                lc = data[DT.LC]
-                self._compute_wavelet_transform()
-                #self._save_data_type(t)
+                if t == DT.WAVELET:
+                    data[t] = data[t][:,self.wavelet_start-1:self.wavelet_end:self.wavelet_step, :]
 
-    def _load_data_type(self, t, test=False):
+    def _load_data_type(self, t, type=DST.TRAIN):
         # filename = f"{self.output_path}/{self.hash}/{t}"
-        filename = f"{self.output_path}/{self.hash}{'/test'if test else ''}/{t}"
+        filename = f"{self.output_path}/{self.hash}{''if type==DST.TRAIN else '/'+type}/{t}"
         if t == DT.WAVELET:
-            filename += f"_{self.wavelet_name}_{self.wavelet_scales}"
-        filename += ".txt"
+            filename += f"_{self.wavelet_name}_{self.max_wavelet_scales}"
+
+        filename += ".npy"
         
         if os.path.exists(filename):
-            return np.loadtxt(filename)
-        
+            data =  np.load(filename)
+            return data
+
+        print(f"File {filename} not found. Skipping...")
         return None
 
     def unload(self):
         self.data.clear()
         self.test_data.clear()
+        self.artificial_data.clear()
 
     
-    def create_dataset_from_csv(self):
+    def create_dataset_from_csv(self, type=DST.TRAIN):
         def read_dataset(data, read_function):
             print(f"Reading csv files....")
             data_dict, header_dict, _ = read_function()
@@ -133,6 +161,8 @@ class DataProcessor:
 
             if self.filter_config:
                 data_dict, header_dict = filter_data(data_dict, header_dict, self.filter_config)
+                for l in data_dict:
+                    print(f"After filtration {len(data_dict[l])} examples for class {l}")
 
             data[LABELS] = np.array([i for i, l in enumerate(self.class_names) for _ in range(len(data_dict[l]))])
             data[HEADERS] = np.concatenate([header_dict[l] for l in self.class_names])
@@ -152,46 +182,102 @@ class DataProcessor:
             data[DT.RECONSTRUCTED_LC] = (y_hat - np.min(y_hat,axis=1, keepdims=True) + 1e-6) / (amplitude + 1e-6)
             data[DT.RMS] = np.sqrt(np.sum(residuals**2,axis=1) / (np.sum(residuals != 0, axis=1)-2 + 1e-6)).reshape(-1,1)
 
-
-        read_dataset(self.data, self._read_csv_files)
-
-        if self.test_path != "":
-            read_dataset(self.test_data, self._read_SDLCD_csv)
+            # self._compute_wavelet_transform(self.wavelet_scales, self.wavelet_step)
+            data[DT.WAVELET] = self._compute_wavelet_transform(data, 1, self.max_wavelet_scales, 1)
 
 
+        print("Reading training data....")
+        match type:
+            case DST.TRAIN:
+                read_dataset(self.data, partial(self._read_csv_files, self.path))
+                # TODO align phases for MIXUP
+                # self._align_phases(self.data[DT.LC])
+            case DST.TEST:
+                read_dataset(self.test_data, self._read_SDLCD_csv)
+                # TODO align phases for MIXUP
+                # self._align_phases(self.test_data[DT.LC])
+            case DST.ARTIFICIAL:
+                read_dataset(self.artificial_data, partial(self._read_csv_files, self.artificial_data_path))
+            case _:
+                raise ValueError(f"Dataset type {type} not recognized. Use one of: 'train', 'test', 'artificial'")
+        # read_dataset(self.data, partial(self._read_csv_files, self.path))
+        # self._align_phases(self.data[DT.LC])
+
+        # if self.artificial_data_path is not None:
+        #     print("Reading artificial data....")
+        #     read_dataset(self.artificial_data, partial(self._read_csv_files, self.artificial_data_path))
+        #     self._align_phases(self.artificial_data[DT.LC], self.data[DT.LC][0])
+
+        # if self.test_path != "":
+        #     print("Reading test data....")
+        #     read_dataset(self.test_data, self._read_SDLCD_csv)
+
+    
+    def _align_phases(self, lcs, first=None):
+        total_err = np.sum([np.linalg.norm(lcs[i] - lcs[i-1]) for i in range(1, len(lcs))])
+        print(f"Total error before aligning: {total_err}")
+        u = lcs[0] if first is None else first
+        start = 1 if first is None else 0
+        for i in tqdm.tqdm(range(start, len(lcs)), desc="Aligning phases"):
+            # u = lcs[i-1]
+            v = lcs[i]
+            lcs[i] = min([np.roll(v, r, axis=0) for r in range(0, v.shape[-1])],
+                         key=lambda vv: np.linalg.norm(vv-u))
+            u = v
+
+        total_err = np.sum([np.linalg.norm(lcs[i] - lcs[i-1]) for i in range(1, len(lcs))])
+        print(f"Total error after aligning: {total_err}")
+
+    def to_output_format(self,data):
+        examples = []
+        for t in self.use_data_types:
+            match t:
+                case DT.LC:
+                    lc = data[t].copy()
+                    lc[lc == 0] = np.nan
+                    lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
+                    lc[np.isnan(lc)] = 0
+                    examples.append(self._compute_lc_shifts(lc))
+                case DT.FS | DT.STD:
+                    examples.append(data[t][:,1:]) 
+                case DT.AMPLITUDE:
+                    examples.append((data[t] / self.max_amplitude).reshape(-1,1))
+                case DT.WAVELET:
+                    if data[t].shape[1] > (self.wavelet_end - self.wavelet_start + 1) / self.wavelet_step:
+                        data[t] = data[t][:,self.wavelet_start-1:self.wavelet_end:self.wavelet_step, :]
+                    examples.append(data[t].reshape(len(data[t]),-1))
+                case _:
+                    examples.append(data[t])
+
+        return examples
     def prepare_dataset(self):
-        def prepare(data):
-            examples = []
-            for t in self.use_data_types:
-                match t:
-                    case DT.LC:
-                        lc = data[t].copy()
-                        lc[lc == 0] = np.nan
-                        lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
-                        lc[np.isnan(lc)] = 0
-                        examples.append(self._compute_lc_shifts(lc))
-                    case DT.FS | DT.STD:
-                        examples.append(data[t][:,1:]) 
-                    case DT.AMPLITUDE:
-                        examples.append(data[t] / self.max_amplitude.reshape(-1, 1))
-                    case _:
-                        examples.append(data[t])
 
-            return examples
-
-
-
-        examples = prepare(self.data)
+        examples = self.to_output_format(self.data)
         X = np.concatenate(tuple(examples), axis=1)
         y = self.data[LABELS]
 
         train_set, val_set = self.split_dataset(X,y)
         test_set = (None, None)
+
+        if self.artificial_data != {}:
+            (train_X, train_y) = train_set
+            val_set = train_set # FOR now to train only on artificial and validate on real
+            examples = self.to_output_format(self.artificial_data)
+            synthetic_X = np.concatenate(tuple(examples), axis=1)
+            train_X = np.concatenate((train_X, synthetic_X), axis=0)
+            train_y = np.concatenate((train_y, self.artificial_data[LABELS]))
+            # train_X = synthetic_X
+            # train_y = self.artificial_data[LABELS]
+            train_set = (train_X, train_y)
+        
         
         if self.test_data != {}:
-            test_examples = prepare(self.test_data)
+            test_examples = self.to_output_format(self.test_data)
             X_test = np.concatenate(tuple(test_examples), axis=1)
             y_test = self.test_data[LABELS]
+            from collections import Counter
+            c = Counter(y_test)
+            print(c)
             test_set = (X_test, y_test)
         
         return (train_set, val_set, test_set)
@@ -208,14 +294,16 @@ class DataProcessor:
         return np.concatenate(shifts, axis=1)
         
 
-    def _compute_wavelet_transform(self):
+    def _compute_wavelet_transform(self,data, start, end, step):
         print("Computing Continuous Wavelet Transform....")
-        lc = self.data[DT.LC]
-        #TODO: Excange ZEROs with Recontructed values????
-        scales = np.arange(1, self.wavelet_scales+1)
+        lc = data[DT.LC].copy()
+        lc[lc == 0] = data[DT.RECONSTRUCTED_LC][lc == 0]
+        lc = (lc - np.nanmin(lc, axis=1, keepdims=True) + 1e-6) / (data[DT.AMPLITUDE].reshape(-1,1) + 1e-6)
+
+        scales = np.arange(start, end+1, step)
         coef, _ = pywt.cwt(lc ,scales,self.wavelet_name)
         coef = coef.transpose(1,0,2) # (N, scales, LC_SIZE)
-        self.data[DT.WAVELET] = coef.reshape(len(lc),-1)
+        return coef
                     
     def split_dataset(self, X, y):
         match self.split_strategy:
@@ -272,7 +360,7 @@ class DataProcessor:
             indices = np.argsort(-np.array(sizes))
             total = 0
 
-            for idx in indices:
+            for idx in tqdm.tqdm(indices, desc=f"Splitting {self.class_names[label]}"):
                 if (sizes[idx] + total < k*1.1 and sizes[idx] + total < N * (1-split)) or \
                     (total == 0 and sizes[idx] + total < N * (1-split)):
                     total += sizes[idx]
@@ -303,9 +391,11 @@ class DataProcessor:
             if label := self.get_object_label(name, self.class_names, self.regexes):
                 data_dict[label].append(x[4:])
                 header = x[1:4]
-                for i in range(26):
-                    header[0] = header[0].replace(chr(ord('A')+i), str(i))
+                # for i in range(26):
+                    # header[0] = header[0].replace(chr(ord('A')+i), str(i))
                 header_dict[label].append(header)
+            else:
+                print(f"Object {name} not recognized. Skipping...")
         
         for l in self.class_names:
             data_dict[l] = np.array(data_dict[l]).reshape(-1, LC_SIZE).astype(np.float32)
@@ -314,12 +404,13 @@ class DataProcessor:
         return data_dict, header_dict, columns
         
        
-    def _read_csv_files(self):
+    def _read_csv_files(self, path):
+        print(self.class_names)
         data_dict = {c: [] for c in self.class_names}
         header_dict = {c: [] for c in self.class_names}
 
         columns = None
-        for file in tqdm.tqdm(glob.glob(f"{self.path}/*.csv")):
+        for file in tqdm.tqdm(glob.glob(f"{path}/*.csv")):
             name = os.path.split(file)[-1][:-len(".csv")]
             if label := self.get_object_label(name, self.class_names, self.regexes):
                 df = pd.read_csv(file)
@@ -332,9 +423,12 @@ class DataProcessor:
 
                 if columns is None:
                     columns = list(df.columns)
+
         for l in self.class_names:
-            data_dict[l] = np.concatenate(data_dict[l])
-            header_dict[l] = np.concatenate(header_dict[l])
+            print(len(data_dict[l]), l)
+            data_dict[l] =  np.concatenate(data_dict[l])
+            header_dict[l] =  np.concatenate(header_dict[l])
+            print(f"Loaded {len(data_dict[l])} examples for class {l}")
 
         return data_dict, header_dict, columns
 
@@ -400,9 +494,14 @@ class DataProcessor:
         
         (train_X, train_y), (val_X, val_y), (test_X, test_y) = self.prepare_dataset()
 
-        train_set = LCDataset(train_X, train_y, self.data_config.train_augmentations)
-        val_set = LCDataset(val_X, val_y, None)
-        test_set = LCDataset(test_X, test_y, None)
+        train_set = LCDataset(train_X, train_y, self.n_classes, self.data_config.train_augmentations )
+        val_set = LCDataset(val_X, val_y, self.n_classes)
+        print(train_set.use_mixup, train_set.use_cyclic_augmentation)
+        test_set = None
+        if self.test_path != "":
+            test_set = LCDataset(test_X, test_y, self.n_classes)
+            from collections import Counter
+            print( Counter(test_set.labels))
 
         return train_set, val_set, test_set
 
